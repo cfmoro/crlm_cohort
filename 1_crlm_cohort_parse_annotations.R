@@ -2,7 +2,7 @@ library(xml2)
 library(rgeos)
 library(stringr)
 
-# Set globals
+# Set globalss
 base_dir <-"/home/bibu/Workspace/crlm_cohort"
 ndpa_dir <- paste(base_dir, "/annotations", sep="")
 out_dir <- paste(base_dir, "/output", sep="")
