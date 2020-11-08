@@ -1,0 +1,150 @@
+---
+title: "crlm_tidy_clindat"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Generated on: `r Sys.time()`
+
+Import required packages
+```{r}
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(eeptools)
+library(survival)
+library(survminer)
+```
+
+```{r}
+workDir <- "/home/bibu/Workspace/crlm_cohort/"
+clinDataFn <- paste(workDir, "datasets/CRLM_clin_cohort.xlsx", sep="")
+
+dateEndFu <- as.Date("2020-10-29") # Current date of end follow up for study
+```
+
+Import data
+```{r}
+# Modifications of CRLM_clin_cohort.xlsx:
+#     -Deleted row 39: repeated case, see XZXZ	2/13/1973
+#     -Row 6: date of progression in liver:  2012-11-19 > 11/19/2012
+
+# Doubts: Rows 3 and 6, same date of date of progression in liver
+
+# https://readxl.tidyverse.org/articles/cell-and-column-types.html
+# Peek at column names in CRLM_clin_cohort.xlsx
+(nms <- names(read_excel(clinDataFn, n_max = 0)))
+
+# Columns to import from excel
+# "PaRaMet.pseudonym", "dob", "sex", "date.of.liver.op", "date.of.death", 
+# "Cancer.Related.Death..Y.N.U..unclear.", "date.of.progression.recidive", "date.of.progression.in.liver", "neoadjuvant..Y.N.", "sync.meta..s.m.", 
+# "lost.for.follow.up"
+
+# Read excel file
+clinData <- read_excel(clinDataFn, n_max = 54, range = , col_types = c(
+  "numeric", "date", "text", "skip", "skip", "skip", "skip", "skip", "skip", "skip",
+  "skip", "date", "skip", "skip", "skip", "skip", "skip", "date", "text", "skip",
+  "date", "skip", "date", "skip", "skip", "text", "text", "skip", "skip", "skip",
+  rep("skip", 16), "date"))
+
+# Rename columns with easy and concise names: rename(flights, tail_num = tailnum)
+(nms <- names(clinData))
+clinData <- rename(clinData, id = "PaRaMet pseudonym", date_birth = dob, date_liver_op = "date of liver op", date_death = "date of death", 
+                   cancer_death = "Cancer Related Death (Y/N/U, unclear)", date_progression = "date of progression/recidive", 
+                   date_progression_liver = "date of progression in liver", neoadjuvant = "neoadjuvant (Y/N)", sync_meta = "sync/meta (s/m)",
+                   date_lost_follow_up = "lost for follow up")
+(nms <- names(clinData))
+
+# Reorder columns
+clinData <- clinData %>% relocate(sex, .after = id)
+clinData <- clinData %>% relocate(date_progression, .after = date_liver_op)
+clinData <- clinData %>% relocate(date_progression_liver, .after = date_progression)
+clinData <- clinData %>% relocate(date_lost_follow_up, .after = date_death)
+clinData <- clinData %>% relocate(sync_meta, .after = date_lost_follow_up)
+clinData <- clinData %>% relocate(neoadjuvant, .after = sync_meta)
+(nms <- names(clinData))
+
+# Convert character values as factors or logical
+clinData$sync_meta <- as.factor(clinData$sync_meta) # S(ynchronous) / M(etachronous)
+clinData$sync_meta <- fct_relevel(clinData$sync_meta, "M", "S")
+
+clinData$cancer_death <- as.factor(clinData$cancer_death) # Y(es) / N(o) / U(nknown)
+clinData$cancer_death <- fct_relevel(clinData$cancer_death, "Y", "N", "U")
+
+clinData$neoadjuvant <- as.factor(clinData$neoadjuvant) # Y(es) / N(o)
+clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
+
+# Generate derived columns: time_follow_up, status_follow_up, age
+fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu = 0)
+fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu = 1)
+fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu = 1)
+
+clinSurvData <- rbind(fuDeath, fuAlive, fuLost)
+
+
+#' Calculate age
+#' 
+#' By default, calculates the typical "age in years", with a
+#' \code{floor} applied so that you are, e.g., 5 years old from
+#' 5th birthday through the day before your 6th birthday. Set
+#' \code{floor = FALSE} to return decimal ages, and change \code{units}
+#' for units other than years.
+#' @param dob date-of-birth, the day to start calculating age.
+#' @param age.day the date on which age is to be calculated.
+#' @param units unit to measure age in. Defaults to \code{"years"}. Passed to \link{\code{duration}}.
+#' @param floor boolean for whether or not to floor the result. Defaults to \code{TRUE}.
+#' @return Age in \code{units}. Will be an integer if \code{floor = TRUE}.
+#' @examples
+#' my.dob <- as.Date('1983-10-20')
+#' age(my.dob)
+#' age(my.dob, units = "minutes")
+#' age(my.dob, floor = FALSE)
+age <- function(dob, age.day = today(), units = "years", floor = TRUE) {
+    calc.age = interval(dob, age.day) / duration(num = 1, units = units)
+    if (floor) return(as.integer(floor(calc.age)))
+    return(calc.age)
+}
+clinSurvData <- clinSurvData %>% mutate(age = age(date_birth, date_liver_op))
+clinSurvData <- clinSurvData %>% relocate(age, .after = id)
+
+hist(clinSurvData$age)
+clinSurvData <- clinSurvData %>% mutate(age_group = ifelse(age >=70, "70+", "<70"))
+clinSurvData <- clinSurvData %>% relocate(age_group, .after = age)
+```
+
+Survival analysis
+```{r}
+# Fit survival data using the Kaplan-Meier method
+survObject <- Surv(time = clinSurvData$time_fu, event = clinSurvData$status_fu)
+
+# Overall
+fitAll <- survfit(survObject ~ 1, data = clinSurvData)
+summary(fitAll)
+ggsurvplot(fitAll, data = clinSurvData, 
+    xlab = "Days", 
+    ylab = "Overall survival probability")
+
+# Age
+fitAge <- survfit(survObject ~ age_group, data = clinSurvData)
+summary(fitAge)
+ggsurvplot(fitAge, data = clinSurvData,
+    xlab = "Days", 
+    ylab = "Overall survival probability",
+    pval = TRUE)
+
+# Sex
+fitSex <- survfit(survObject ~ sex, data = clinSurvData)
+summary(fitSex)
+ggsurvplot(fitSex, data = clinSurvData,
+    xlab = "Days", 
+    ylab = "Overall survival probability",
+    pval = TRUE)
+
+# Fit a Cox proportional hazards model
+fit.coxph <- coxph(survObject ~ age_group + sex,
+                   data = clinSurvData)
+ggforest(fit.coxph, data = clinSurvData)
+```
