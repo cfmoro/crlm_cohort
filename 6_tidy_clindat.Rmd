@@ -78,10 +78,11 @@ clinData$cancer_death <- fct_relevel(clinData$cancer_death, "Y", "N", "U")
 clinData$neoadjuvant <- as.factor(clinData$neoadjuvant) # Y(es) / N(o)
 clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
 
-# Generate derived columns: time_follow_up, status_follow_up, age
-fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu = 0)
-fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu = 1)
-fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu = 1)
+# Generate derived columns: time_follow_up, status_follow_up (1 - death observed, 0 - survival time censored)
+# MOST IMPORTANT FOR SURV ANALYSYS, ALWAYS CHECK
+fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu = 1)
+fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu = 0)
+fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu = 0)
 
 clinSurvData <- rbind(fuDeath, fuAlive, fuLost)
 
@@ -112,15 +113,18 @@ clinSurvData <- clinSurvData %>% mutate(age = age(date_birth, date_liver_op))
 clinSurvData <- clinSurvData %>% relocate(age, .after = id)
 
 hist(clinSurvData$age)
-clinSurvData <- clinSurvData %>% mutate(age_group = ifelse(age >=70, "70+", "<70"))
+clinSurvData <- clinSurvData %>% mutate(age_group = ifelse(age >=60, "60+", "<60"))
 clinSurvData <- clinSurvData %>% relocate(age_group, .after = age)
 ```
 
 Survival analysis
 ```{r}
 # https://www.datacamp.com/community/tutorials/survival-analysis-R
+# https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
+# https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
 # Fit survival data using the Kaplan-Meier method
 survObject <- Surv(time = clinSurvData$time_fu, event = clinSurvData$status_fu)
+survObject
 
 # Overall
 fitAll <- survfit(survObject ~ 1, data = clinSurvData)
@@ -128,6 +132,7 @@ summary(fitAll)
 ggsurvplot(fitAll, data = clinSurvData, 
     xlab = "Days", 
     ylab = "Overall survival probability")
+fitAll
 
 # Age
 fitAge <- survfit(survObject ~ age_group, data = clinSurvData)
@@ -136,6 +141,7 @@ ggsurvplot(fitAge, data = clinSurvData,
     xlab = "Days", 
     ylab = "Overall survival probability",
     pval = TRUE)
+fitAge
 
 # Sex
 fitSex <- survfit(survObject ~ sex, data = clinSurvData)
@@ -144,6 +150,7 @@ ggsurvplot(fitSex, data = clinSurvData,
     xlab = "Days", 
     ylab = "Overall survival probability",
     pval = TRUE)
+fitSex
 
 # Fit a Cox proportional hazards model
 fit.coxph <- coxph(survObject ~ age_group + sex,
