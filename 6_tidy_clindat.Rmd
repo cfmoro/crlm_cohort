@@ -32,8 +32,9 @@ Import data
 #     -Deleted row 39: repeated case, see XZXZ	2/13/1973
 #     -Row 6: date of progression in liver:  2012-11-19 > 11/19/2012
 
-# Doubts: Rows 3 and 6, same date of date of progression in liver
-
+# Doubts: Ids 2 and 6, same date of date of progression and progression in liver
+#         Id 11, no date for liver op   
+ 
 # https://readxl.tidyverse.org/articles/cell-and-column-types.html
 # Peek at column names in CRLM_clin_cohort.xlsx
 (nms <- names(read_excel(clinDataFn, n_max = 0)))
@@ -117,6 +118,7 @@ clinSurvData <- clinSurvData %>% relocate(age_group, .after = age)
 
 Survival analysis
 ```{r}
+# https://www.datacamp.com/community/tutorials/survival-analysis-R
 # Fit survival data using the Kaplan-Meier method
 survObject <- Surv(time = clinSurvData$time_fu, event = clinSurvData$status_fu)
 
