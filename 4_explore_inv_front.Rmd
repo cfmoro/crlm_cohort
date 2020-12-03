@@ -28,7 +28,7 @@ gp_slide$annotation_types <- factor(gp_slide$annotation_types, levels = c("P", "
 
 Configure palete for plots
 ```{r}
-myColors <- c("green", "blue","orange", "red")
+myColors <- c("blue", "green", "orange", "red")
 names(myColors) <- levels(gp_slide$annotation_types)
 colScale <- scale_colour_manual(name = "annotation_types",values = myColors)
 ```
