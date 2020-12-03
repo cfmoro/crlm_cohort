@@ -1,0 +1,125 @@
+---
+title: "7_survival_analysis_os"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Generated on: `r Sys.time()`
+
+Import required packages
+```{r}
+library(tidyverse)
+library(survival)
+library(survminer)
+```
+
+```{r}
+workDir <- "/home/bibu/Workspace/crlm_cohort/"
+
+clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+```
+
+Import data
+```{r}
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+
+clinPatAnnotData$marginal0 <- fct_relevel(clinPatAnnotData$marginal0, "0", ">0")
+clinPatAnnotData$marginal01 <- fct_relevel(clinPatAnnotData$marginal01, "0", "<1", "1+")
+
+# IMPORTANT to uncomment according to desired analysis
+#clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "Y")
+clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "N")
+```
+
+Parametrized survival function (to avoid code repetition)
+```{r}
+# Adapted from https://stackoverflow.com/questions/51193443/creating-a-function-passing-its-arguments-to-the-surv-function-or-any-other
+survFun <- function(surv.object, grouping, fun.dat) {
+  params <- list(surv.object = substitute(surv.object), grouping = substitute(grouping), fun.dat = substitute(fun.dat))
+  expr <- substitute(survfit(surv.object ~ grouping, data = fun.dat), params)
+  fit.dat <- eval.parent(expr)
+  
+p <- ggsurvplot(fit.dat, data = fun.dat, 
+    xlab = "Days", 
+    ylab = "Overall survival probability",
+    pval = TRUE)  
+
+  print(fit.dat)
+  print(p)
+  print(summary(fit.dat))
+  
+ }
+```
+
+Survival analysis clinica data (Overall Survival)
+```{r}
+# https://www.datacamp.com/community/tutorials/survival-analysis-R
+# https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
+# https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
+# Fit survival data using the Kaplan-Meier method
+survObjectOS <- Surv(time = clinPatAnnotData$time_fu_os, event = clinPatAnnotData$status_fu_os)
+survObjectOS
+
+# Overall
+survFun(survObjectOS, 1, clinPatAnnotData)
+
+# Age
+survFun(survObjectOS, age_, clinPatAnnotData)
+
+# Sex
+survFun(survObjectOS, sex, clinPatAnnotData)
+
+# Sync/meta
+survFun(survObjectOS, sync_meta, clinPatAnnotData)
+
+# Neoadjuvant
+survFun(survObjectOS, neoadjuvant, clinPatAnnotData)
+
+# Num tumors
+survFun(survObjectOS, num_tumors_, clinPatAnnotData)
+
+# Largest tumor diameter
+survFun(survObjectOS, max_tum_diameter, clinPatAnnotData)
+
+# Sum of tumor diameters
+survFun(survObjectOS, sum_tum_diameter, clinPatAnnotData)
+
+# Marginal 0 mm
+survFun(survObjectOS, marginal0, clinPatAnnotData)
+
+# Marginal 1 mm
+survFun(survObjectOS, marginal1, clinPatAnnotData)
+
+# Marginal 0, 1 mm
+survFun(survObjectOS, marginal01, clinPatAnnotData)
+
+# Tumor percent (Blazer classification) according to original pathology report or completed by review when missing
+survFun(survObjectOS, tum_percent_report, clinPatAnnotData)
+
+# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to original pathology report or completed by review when missing
+survFun(survObjectOS, tum_score_report, clinPatAnnotData)
+
+# Percent tumor, according to annotations (review)
+survFun(survObjectOS, tum_percent_annot_, clinPatAnnotData)
+
+# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to annotations (review)
+survFun(survObjectOS, tum_score_annot_, clinPatAnnotData)
+
+# Replacement GP, according to annotations
+survFun(survObjectOS, replacement, clinPatAnnotData)
+
+# Summmed replacement score, calculated as the sum of % replacement x diameter, the former according to annotations (review)
+survFun(survObjectOS, replacement_score, clinPatAnnotData)
+```
+
+Multivariate analysis (CCox proportional hazards model)
+```{r, fig.width= 10}
+# Fit a Cox proportional hazards model
+# TODO: Study how this works and what parameter should be included
+fit.coxph <- coxph(survObjectOS ~ neoadjuvant + sex + sync_meta + age_ + num_tumors_ + max_tum_diameter + sum_tum_diameter + marginal0 + tum_percent_annot_ + replacement,
+                   data = clinPatAnnotData)
+ggforest(fit.coxph, data = clinPatAnnotData)
+```
