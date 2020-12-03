@@ -22,6 +22,12 @@ library(survminer)
 ```{r}
 workDir <- "/home/bibu/Workspace/crlm_cohort/"
 clinDataFn <- paste(workDir, "datasets/CRLM_clin_cohort.xlsx", sep="")
+patDataFn <- paste(workDir, "datasets/CRLM_KS_cohort_pathology_200904.xlsx", sep="")
+gpProbeFn <- paste(workDir, "output/gp_annotations_by_probe.csv", sep="")
+tumorPercentProbeFn <- paste(workDir, "output/regression_by_probe.csv", sep="")
+clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+tumorPercentTumorFn <- paste(workDir, "output/regression_by_tumor.csv", sep="")
+gpAnnotationsTumorFn <- paste(workDir, "output/gp_annotations_by_tumor.csv", sep="")
 
 dateEndFu <- as.Date("2020-10-29") # Current date of end follow up for study
 ```
@@ -45,7 +51,7 @@ Import data
 # "lost.for.follow.up"
 
 # Read excel file
-clinData <- read_excel(clinDataFn, n_max = 54, range = , col_types = c(
+clinData <- read_excel(clinDataFn, n_max = 54, col_types = c(
   "numeric", "date", "text", "skip", "skip", "skip", "skip", "skip", "skip", "skip",
   "skip", "date", "skip", "skip", "skip", "skip", "skip", "date", "text", "skip",
   "date", "skip", "date", "skip", "skip", "text", "text", "skip", "skip", "skip",
@@ -72,6 +78,7 @@ clinData <- clinData %>% relocate(neoadjuvant, .after = sync_meta)
 clinData$sync_meta <- as.factor(clinData$sync_meta) # S(ynchronous) / M(etachronous)
 clinData$sync_meta <- fct_relevel(clinData$sync_meta, "M", "S")
 
+# TODO: Handle cancer_death Unknown
 clinData$cancer_death <- as.factor(clinData$cancer_death) # Y(es) / N(o) / U(nknown)
 clinData$cancer_death <- fct_relevel(clinData$cancer_death, "Y", "N", "U")
 
@@ -80,9 +87,9 @@ clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
 
 # Generate derived columns: time_follow_up, status_follow_up (1 - death observed, 0 - survival time censored)
 # MOST IMPORTANT FOR SURV ANALYSYS, ALWAYS CHECK
-fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu = 1)
-fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu = 0)
-fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu = 0)
+fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu_os = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_os = 1)
+fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_os = 0)
+fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_os = 0)
 
 clinSurvData <- rbind(fuDeath, fuAlive, fuLost)
 
@@ -112,48 +119,327 @@ age <- function(dob, age.day = today(), units = "years", floor = TRUE) {
 clinSurvData <- clinSurvData %>% mutate(age = age(date_birth, date_liver_op))
 clinSurvData <- clinSurvData %>% relocate(age, .after = id)
 
+# Dichotomize age
 hist(clinSurvData$age)
 clinSurvData <- clinSurvData %>% mutate(age_group = ifelse(age >=60, "60+", "<60"))
 clinSurvData <- clinSurvData %>% relocate(age_group, .after = age)
 ```
 
-Survival analysis
+Merge clinical with pathology report data
 ```{r}
-# https://www.datacamp.com/community/tutorials/survival-analysis-R
-# https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
-# https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
-# Fit survival data using the Kaplan-Meier method
-survObject <- Surv(time = clinSurvData$time_fu, event = clinSurvData$status_fu)
-survObject
+# Peek at column names in CRLM_KS_cohort_pathology_200904
+(nms <- names(read_excel(patDataFn, n_max = 0, skip = 2)))
 
-# Overall
-fitAll <- survfit(survObject ~ 1, data = clinSurvData)
-summary(fitAll)
-ggsurvplot(fitAll, data = clinSurvData, 
-    xlab = "Days", 
-    ylab = "Overall survival probability")
-fitAll
+# Read pathology report data
+patDataOrig <- read_excel(patDataFn, n_max = 58, skip = 2, col_types = c(
+  "skip", "numeric", "skip", "numeric", "text", 
+  rep(c("numeric", rep("skip", 6), "numeric", "numeric"),3),
+  "skip",
+  rep(c("numeric", rep("skip", 6), "numeric", "numeric"),13)))
 
-# Age
-fitAge <- survfit(survObject ~ age_group, data = clinSurvData)
-summary(fitAge)
-ggsurvplot(fitAge, data = clinSurvData,
-    xlab = "Days", 
-    ylab = "Overall survival probability",
-    pval = TRUE)
-fitAge
+# TODO: Fix incorrect diameters in rows nr 5, 10, 14, 17
 
-# Sex
-fitSex <- survfit(survObject ~ sex, data = clinSurvData)
-summary(fitSex)
-ggsurvplot(fitSex, data = clinSurvData,
-    xlab = "Days", 
-    ylab = "Overall survival probability",
-    pval = TRUE)
-fitSex
+# Complete missing tumor % orig with review
+patDataTemp <- patDataOrig %>% mutate('tumor_a_percent_tumor (%)' = ifelse(is.na(`tumor_a_percent_tumor_orig (%)`), `tumor_a_percent_tumor_review (%)`, `tumor_a_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_a_percent_tumor (%)`, .before = `tumor_a_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_b_percent_tumor (%)' = ifelse(is.na(`tumor_b_percent_tumor_orig (%)`), `tumor_b_percent_tumor_review (%)`, `tumor_b_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_b_percent_tumor (%)`, .before = `tumor_b_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_c_percent_tumor (%)' = ifelse(is.na(`tumor_c_percent_tumor_orig (%)`), `tumor_c_percent_tumor_review (%)`, `tumor_c_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_c_percent_tumor (%)`, .before = `tumor_c_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_d_percent_tumor (%)' = ifelse(is.na(`tumor_d_percent_tumor_orig (%)`), `tumor_d_percent_tumor_review (%)`, `tumor_d_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_d_percent_tumor (%)`, .before = `tumor_d_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_e_percent_tumor (%)' = ifelse(is.na(`tumor_e_percent_tumor_orig (%)`), `tumor_e_percent_tumor_review (%)`, `tumor_e_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_e_percent_tumor (%)`, .before = `tumor_e_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_f_percent_tumor (%)' = ifelse(is.na(`tumor_f_percent_tumor_orig (%)`), `tumor_f_percent_tumor_review (%)`, `tumor_f_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_f_percent_tumor (%)`, .before = `tumor_f_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_g_percent_tumor (%)' = ifelse(is.na(`tumor_g_percent_tumor_orig (%)`), `tumor_g_percent_tumor_review (%)`, `tumor_g_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_g_percent_tumor (%)`, .before = `tumor_g_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_h_percent_tumor (%)' = ifelse(is.na(`tumor_h_percent_tumor_orig (%)`), `tumor_h_percent_tumor_review (%)`, `tumor_h_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_h_percent_tumor (%)`, .before = `tumor_h_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_i_percent_tumor (%)' = ifelse(is.na(`tumor_i_percent_tumor_orig (%)`), `tumor_i_percent_tumor_review (%)`, `tumor_i_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_i_percent_tumor (%)`, .before = `tumor_i_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_j_percent_tumor (%)' = ifelse(is.na(`tumor_j_percent_tumor_orig (%)`), `tumor_j_percent_tumor_review (%)`, `tumor_j_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_j_percent_tumor (%)`, .before = `tumor_j_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_k_percent_tumor (%)' = ifelse(is.na(`tumor_k_percent_tumor_orig (%)`), `tumor_k_percent_tumor_review (%)`, `tumor_k_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_k_percent_tumor (%)`, .before = `tumor_k_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_l_percent_tumor (%)' = ifelse(is.na(`tumor_l_percent_tumor_orig (%)`), `tumor_l_percent_tumor_review (%)`, `tumor_l_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_l_percent_tumor (%)`, .before = `tumor_l_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_m_percent_tumor (%)' = ifelse(is.na(`tumor_m_percent_tumor_orig (%)`), `tumor_m_percent_tumor_review (%)`, `tumor_m_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_m_percent_tumor (%)`, .before = `tumor_m_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_n_percent_tumor (%)' = ifelse(is.na(`tumor_n_percent_tumor_orig (%)`), `tumor_n_percent_tumor_review (%)`, `tumor_n_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_n_percent_tumor (%)`, .before = `tumor_n_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_o_percent_tumor (%)' = ifelse(is.na(`tumor_o_percent_tumor_orig (%)`), `tumor_o_percent_tumor_review (%)`, `tumor_o_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_o_percent_tumor (%)`, .before = `tumor_o_percent_tumor_orig (%)`)
+patDataTemp <- patDataTemp %>% mutate('tumor_p_percent_tumor (%)' = ifelse(is.na(`tumor_p_percent_tumor_orig (%)`), `tumor_p_percent_tumor_review (%)`, `tumor_p_percent_tumor_orig (%)`))
+patDataTemp <- patDataTemp %>% relocate(`tumor_p_percent_tumor (%)`, .before = `tumor_p_percent_tumor_orig (%)`)
 
-# Fit a Cox proportional hazards model
-fit.coxph <- coxph(survObject ~ age_group + sex,
-                   data = clinSurvData)
-ggforest(fit.coxph, data = clinSurvData)
+# Derive max tumour diameter per probe
+patDataTemp <- patDataTemp %>% rowwise() %>% mutate(max_diameter = max(c_across(contains("largest_diameter (cm)")), na.rm = TRUE))
+
+# Derive sum of tumor diameters per probe
+patDataTemp <- patDataTemp %>% rowwise() %>% mutate(sum_diameter = sum(c_across(contains("largest_diameter (cm)")), na.rm = TRUE))
+
+# Derive mean regression per probe
+patDataTemp <- patDataTemp %>% rowwise() %>% mutate(mean_tumor_percent_report = mean(c_across(contains("percent_tumor (%)")), na.rm = TRUE))
+patDataTemp <-patDataTemp %>% mutate(mean_tumor_percent_report = ifelse(is.nan(mean_tumor_percent_report), NA, mean_tumor_percent_report) )
+
+patDataTemp$mean_tumor_percent_report <- as.numeric(patDataTemp$mean_tumor_percent_report)
+
+# Derive sum regression score per probe (sum of % tumor x diameter)
+# TODO: sum of NA (or a product of it) is 0. We need to garantee every diameter is matched with percent tumour. Add integrity check code
+patDataTemp <- patDataTemp %>%  mutate(sum_tumour_score_report = sum(
+  `tumor_a_percent_tumor (%)` * `tumor_a_largest_diameter (cm)`, `tumor_b_percent_tumor (%)` * `tumor_b_largest_diameter (cm)`,
+  `tumor_c_percent_tumor (%)` * `tumor_c__largest_diameter (cm)`, `tumor_d_percent_tumor (%)` * `tumor_d__largest_diameter (cm)`,
+  `tumor_e_percent_tumor (%)` * `tumor_e__largest_diameter (cm)`, `tumor_f_percent_tumor (%)` * `tumor_f__largest_diameter (cm)`,
+  `tumor_g_percent_tumor (%)` * `tumor_g__largest_diameter (cm)`, `tumor_h_percent_tumor (%)` * `tumor_h__largest_diameter (cm)`,
+  `tumor_i_percent_tumor (%)` * `tumor_i__largest_diameter (cm)`, `tumor_j_percent_tumor (%)` * `tumor_j__largest_diameter (cm)`,
+  `tumor_k_percent_tumor (%)` * `tumor_k__largest_diameter (cm)`, `tumor_l_percent_tumor (%)` * `tumor_l__largest_diameter (cm)`,
+  `tumor_m_percent_tumor (%)` * `tumor_m__largest_diameter (cm)`, `tumor_n_percent_tumor (%)` * `tumor_n__largest_diameter (cm)`,
+  `tumor_o_percent_tumor (%)` * `tumor_o__largest_diameter (cm)`, `tumor_p_percent_tumor (%)` * `tumor_p__largest_diameter (cm)`
+  , na.rm = TRUE))
+# UGLY AND BUGGY HACK - We loose complete regressions, fix above
+patDataTemp <-patDataTemp %>% mutate(sum_tumour_score_report = na_if(sum_tumour_score_report, 0.0))
+
+# Useless snippet: patDataTemp <- patDataTemp %>% mutate(across(contains("percent_tumor_orig"), .names = "NEW_{col}")) %>% rename_with( ~ gsub("_orig (%)", "", .x, fixed = TRUE), .cols = contains("NEW_")) %>% rename_with( ~ gsub("NEW_", "", .x, fixed = TRUE), .cols = contains("NEW_"))
+
+# Leave out per tumour nodule columns
+patData <- patDataTemp %>% select(-contains("largest_diameter"), -contains("tumor_orig"), -contains("tumor_review"), -contains("percent_tumor (%)"))
+
+# Rename columns
+patData <- rename(patData, id = "projectnr", marginal = "min_dist_lever_rr (mm)")
+                   
+# Convert marginal <1 into 0.5 and make it numeric
+patData$marginal <- gsub("<1", "0.5", patData$marginal, fixed = TRUE)
+patData$marginal <- as.numeric(patData$marginal)
+
+# Dichotomize num_tumors
+table(patData$num_tumors)
+hist(patData$num_tumors, breaks = 20)
+patData <- patData %>% mutate(num_tumors_group = ifelse(num_tumors >=4, "4+", "<4"))
+patData <- patData %>% relocate(num_tumors_group, .after = num_tumors)
+
+# Dichotomize largest tumors diameter
+table(patData$max_diameter)
+hist(patData$max_diameter)
+patData <- patData %>% mutate(max_diameter_group = ifelse(max_diameter >=5, "5+", "<5"))
+patData <- patData %>% relocate(max_diameter_group, .after = max_diameter)
+
+# Dichotomize sum tumor diameters
+table(patData$sum_diameter)
+hist(patData$sum_diameter)
+patData <- patData %>% mutate(sum_diameter_group = ifelse(sum_diameter >=9, "9+", "<9")) # Significant already with 7
+patData <- patData %>% relocate(sum_diameter_group, .after = sum_diameter)
+
+# Dichotomize marginal with 0 and 1 mm as cut-offs
+table(patData$marginal)
+hist(patData$marginal, freq = TRUE, breaks = c(0, 1, 5, seq(10, max(patData$marginal, na.rm = TRUE), by = 10)))
+patData <- patData %>% mutate(marginal_group0 = ifelse(marginal > 0, ">0", "0"))
+patData <- patData %>% relocate(marginal_group0, .after = marginal)
+
+patData <- patData %>% mutate(marginal_group1 = ifelse(marginal >= 1, "1+", "<1"))
+patData <- patData %>% relocate(marginal_group1, .after = marginal_group0)
+
+patData <- patData %>% mutate(marginal_group01 = ifelse(marginal == 0, "0", ifelse(marginal >= 1, "1+", "<1") ))
+patData <- patData %>% relocate(marginal_group01, .after = marginal_group1)
+
+# Dichotomize mean tumor percent
+table(patData$mean_tumor_percent_report)
+hist(patData$mean_tumor_percent_report, freq = TRUE, breaks = c(0, 5, seq(10, 100, by = 10)))
+#patData <- patData %>% mutate(tum_percent_gr = ifelse(mean_tumor_percent >= 50, "50+", "<50"))
+patData <- patData %>% mutate(tum_percent_report_group = ifelse(mean_tumor_percent_report == 0, "<0",
+                                                                ifelse(mean_tumor_percent_report > 0 & mean_tumor_percent_report < 50, "1-50", "50+")))
+patData <- patData %>% relocate(tum_percent_report_group, .after = mean_tumor_percent_report)
+
+# Dichotomize sum regression score
+table(patData$sum_tumour_score_report)
+hist(patData$sum_tumour_score_report)
+patData <- patData %>% mutate(sum_tumour_score_report_group = ifelse(sum_tumour_score_report >= 250, "250+", "<250"))
+patData <- patData %>% relocate(sum_tumour_score_report_group, .after = sum_tumour_score_report)
+
+# Merge clinical and pathology report data
+clinPatData <- merge(clinSurvData, patData, by = "id", all.x = TRUE)
+```
+
+Read and process annotation derived GP data
+```{r }
+gpProbeOrig <- read.csv(gpProbeFn, row.names=NULL)
+gpProbeOrig$annotation_types <- fct_relevel(gpProbeOrig$annotation_types, "P", "D","R2", "R")
+
+# Rename columns
+gpProbeOrig <- gpProbeOrig %>% rename(id = ids)
+
+# Initialize % of replacement for every tumor, so those with 0 % are captured in next filter
+for(an_id in unique(gpProbeOrig$id)) {
+  gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "R", length_um = 0, percent_gp = 0)
+}
+
+# Derive % replacement per probe
+gpProbeReplacement <- gpProbeOrig %>% group_by(id) %>% filter(annotation_types == "R" | annotation_types == "R2") %>% summarise(replacement_percent = sum(percent_gp) )
+
+# Dichotomize % replacement
+table(gpProbeReplacement$replacement_percent)
+hist(gpProbeReplacement$replacement_percent)
+gpProbeReplacement <- gpProbeReplacement %>% mutate(replacement_group = ifelse(replacement_percent == 0, "0",
+                                                                ifelse(replacement_percent > 0 & replacement_percent < 50, "1-50", "50+")))
+gpProbeReplacement <- gpProbeReplacement %>% relocate(replacement_percent, .after = replacement_percent)
+```
+
+Read and process annotation derived regression data
+```{r }
+tumorPercentProbeOrig <- read.csv(tumorPercentProbeFn, row.names=NULL)
+
+# Rename columns
+tumorPercentProbe <- tumorPercentProbeOrig %>% rename(id = ids, tum_percent_annot = avg_percent)
+
+# Dichotomize % tumor annot
+table(tumorPercentProbe$tum_percent_annot)
+hist(tumorPercentProbe$tum_percent_annot)
+tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_group = ifelse(tum_percent_annot == 0, "0",
+                                                                ifelse(tum_percent_annot > 0 & tum_percent_annot < 50, "1-50", "50+")))
+```
+
+Merge annotation derived regression and GP data with clinPath data
+```{r }
+clinPatAnnotationData <- merge(clinPatData, gpProbeReplacement, by = "id", all.x = TRUE)
+clinPatAnnotationData <- merge(clinPatAnnotationData, tumorPercentProbe, by = "id", all.x = TRUE)
+```
+
+Weighted annotation derived regression
+```{r }
+# Extract id and tumor diameters 
+tumDiameters <- patDataTemp %>% select(projectnr, contains("_largest_diameter"))
+tumDiameters <- rename(tumDiameters, id = "projectnr")
+
+tumPercentByTumor <- read.csv(tumorPercentTumorFn)
+tumPercentByTumorWide <- tumPercentByTumor %>% pivot_wider(names_from = tumors, values_from = avg_percent, names_prefix = "%_tum_ann_")
+tumPercentByTumorWide <- tumPercentByTumorWide %>% rename(id = "ids")
+tumPercentByTumorDiams <- merge(tumPercentByTumorWide, tumDiameters, by = "id")
+
+# Set aside % tumor and largest diameter for easier visual assessment
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_a_largest_diameter (cm)`, .after = `%_tum_ann_a`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_b_largest_diameter (cm)`, .after = `%_tum_ann_b`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_c__largest_diameter (cm)`, .after = `%_tum_ann_c`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_d__largest_diameter (cm)`, .after = `%_tum_ann_d`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_e__largest_diameter (cm)`, .after = `%_tum_ann_e`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_f__largest_diameter (cm)`, .after = `%_tum_ann_f`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_g__largest_diameter (cm)`, .after = `%_tum_ann_g`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_h__largest_diameter (cm)`, .after = `%_tum_ann_h`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_i__largest_diameter (cm)`, .after = `%_tum_ann_i`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_j__largest_diameter (cm)`, .after = `%_tum_ann_j`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_k__largest_diameter (cm)`, .after = `%_tum_ann_k`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_l__largest_diameter (cm)`, .after = `%_tum_ann_l`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_m__largest_diameter (cm)`, .after = `%_tum_ann_m`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_n__largest_diameter (cm)`, .after = `%_tum_ann_n`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_o__largest_diameter (cm)`, .after = `%_tum_ann_o`)
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_p__largest_diameter (cm)`, .after = `%_tum_ann_p`)
+
+# TODO: Implement a check so that for every tumor with diameter should be a % annotation tumor
+
+# Derive sum regression score per probe (sum of % tumor x diameter)
+# TODO: sum of NA (or a product of it) is 0. We need to garantee every diameter is matched with percent tumour. Add integrity check code
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% rowwise() %>%  mutate(sum_tumour_score_annot = sum(
+  `%_tum_ann_a` * `tumor_a_largest_diameter (cm)`, `%_tum_ann_b` * `tumor_b_largest_diameter (cm)`,
+  `%_tum_ann_c` * `tumor_c__largest_diameter (cm)`, `%_tum_ann_d` * `tumor_d__largest_diameter (cm)`,
+  `%_tum_ann_e` * `tumor_e__largest_diameter (cm)`, `%_tum_ann_f` * `tumor_f__largest_diameter (cm)`,
+  `%_tum_ann_g` * `tumor_g__largest_diameter (cm)`, `%_tum_ann_h` * `tumor_h__largest_diameter (cm)`,
+  `%_tum_ann_i` * `tumor_i__largest_diameter (cm)`, `%_tum_ann_j` * `tumor_j__largest_diameter (cm)`,
+  `%_tum_ann_k` * `tumor_k__largest_diameter (cm)`, `%_tum_ann_l` * `tumor_l__largest_diameter (cm)`,
+  `%_tum_ann_m` * `tumor_m__largest_diameter (cm)`, `%_tum_ann_n` * `tumor_n__largest_diameter (cm)`,
+  `%_tum_ann_o` * `tumor_o__largest_diameter (cm)`, `%_tum_ann_p` * `tumor_p__largest_diameter (cm)`
+  , na.rm = TRUE))
+tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(sum_tumour_score_annot, .after = id)
+
+# Leave out per tumour nodule columns
+tumPercentByTumorDiamsTrim <- tumPercentByTumorDiams %>% select(-contains("largest_diameter"), -contains("%_tum_ann"))
+
+# Dichotomize sum tumor score annot
+hist(tumPercentByTumorDiamsTrim$sum_tumour_score_annot)
+tumPercentByTumorDiamsTrim <- tumPercentByTumorDiamsTrim %>% mutate(sum_tumour_score_annot_group = ifelse(sum_tumour_score_annot >= 250, "250+", "<250"))
+tumPercentByTumorDiamsTrim <- tumPercentByTumorDiamsTrim %>% relocate(sum_tumour_score_annot_group, .after = sum_tumour_score_annot)
+
+clinPatAnnotationData <- merge(clinPatAnnotationData, tumPercentByTumorDiamsTrim)
+```
+
+Merge annotation derived regression data with clinPath data
+```{r }
+gpByTumor <- read.csv(gpAnnotationsTumorFn)
+gpByTumor <- gpByTumor %>% select(-length_um)
+
+# Initialize % of replacement for every tumor, so those with 0 % are captured in next filter
+for(an_id in unique(gpByTumor$ids)) {
+  for(a_tumor in unique(gpByTumor[ gpByTumor$ids == an_id, ]$tumors)) {
+    gpByTumor <- gpByTumor %>% add_row(ids = an_id, tumors = a_tumor, annotation_types = "R", percent_gp = 0)
+  }
+}
+
+# Derive % replacement per probe
+replacementByTumor <- gpByTumor %>% group_by(ids, tumors) %>% filter(annotation_types == "R" | annotation_types == "R2") %>% summarise(replacement_percent = sum(percent_gp) )
+replacementByTumorWide <- replacementByTumor %>% pivot_wider(names_from = tumors, values_from = replacement_percent, names_prefix = "replacement_tum_ann_")
+
+replacementByTumorWide <- replacementByTumorWide %>% rename(id = "ids")
+replacementByTumorDiams <- merge(replacementByTumorWide, tumDiameters, by = "id")
+
+# Set aside % tumor and largest diameter for easier visual assessment
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_a_largest_diameter (cm)`, .after = `replacement_tum_ann_a`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_b_largest_diameter (cm)`, .after = `replacement_tum_ann_b`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_c__largest_diameter (cm)`, .after = `replacement_tum_ann_c`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_d__largest_diameter (cm)`, .after = `replacement_tum_ann_d`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_e__largest_diameter (cm)`, .after = `replacement_tum_ann_e`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_f__largest_diameter (cm)`, .after = `replacement_tum_ann_f`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_g__largest_diameter (cm)`, .after = `replacement_tum_ann_g`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_h__largest_diameter (cm)`, .after = `replacement_tum_ann_h`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_i__largest_diameter (cm)`, .after = `replacement_tum_ann_i`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_j__largest_diameter (cm)`, .after = `replacement_tum_ann_j`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_k__largest_diameter (cm)`, .after = `replacement_tum_ann_k`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_l__largest_diameter (cm)`, .after = `replacement_tum_ann_l`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_m__largest_diameter (cm)`, .after = `replacement_tum_ann_m`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_n__largest_diameter (cm)`, .after = `replacement_tum_ann_n`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_o__largest_diameter (cm)`, .after = `replacement_tum_ann_o`)
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_p__largest_diameter (cm)`, .after = `replacement_tum_ann_p`)
+
+# TODO: Implement a check so that for every tumor with diameter should be a % annotation tumor
+
+# Derive sum regression score per probe (sum of % tumor x diameter)
+# TODO: sum of NA (or a product of it) is 0. We need to garantee every diameter is matched with percent tumour. Add integrity check code
+replacementByTumorDiams <- replacementByTumorDiams %>% rowwise() %>%  mutate(sum_replacement_score_annot = sum(
+  `replacement_tum_ann_a` * `tumor_a_largest_diameter (cm)`, `replacement_tum_ann_b` * `tumor_b_largest_diameter (cm)`,
+  `replacement_tum_ann_c` * `tumor_c__largest_diameter (cm)`, `replacement_tum_ann_d` * `tumor_d__largest_diameter (cm)`,
+  `replacement_tum_ann_e` * `tumor_e__largest_diameter (cm)`, `replacement_tum_ann_f` * `tumor_f__largest_diameter (cm)`,
+  `replacement_tum_ann_g` * `tumor_g__largest_diameter (cm)`, `replacement_tum_ann_h` * `tumor_h__largest_diameter (cm)`,
+  `replacement_tum_ann_i` * `tumor_i__largest_diameter (cm)`, `replacement_tum_ann_j` * `tumor_j__largest_diameter (cm)`,
+  `replacement_tum_ann_k` * `tumor_k__largest_diameter (cm)`, `replacement_tum_ann_l` * `tumor_l__largest_diameter (cm)`,
+  `replacement_tum_ann_m` * `tumor_m__largest_diameter (cm)`, `replacement_tum_ann_n` * `tumor_n__largest_diameter (cm)`,
+  `replacement_tum_ann_o` * `tumor_o__largest_diameter (cm)`, `replacement_tum_ann_p` * `tumor_p__largest_diameter (cm)`
+  , na.rm = TRUE))
+replacementByTumorDiams <- replacementByTumorDiams %>% relocate(sum_replacement_score_annot, .after = id)
+
+# Leave out per tumour nodule columns
+replacementByTumorDiamsTrim <- replacementByTumorDiams %>% select(-contains("largest_diameter"), -contains("replacement_tum_ann"))
+
+# Dichotomize sum replacement score annot
+hist(replacementByTumorDiamsTrim$sum_replacement_score_annot)
+replacementByTumorDiamsTrim <- replacementByTumorDiamsTrim %>% mutate(sum_replacement_score_annot_group = ifelse(sum_replacement_score_annot == 0, "0",
+                                                                ifelse(sum_replacement_score_annot > 0 & sum_replacement_score_annot < 150, "1-150", "150+")))
+replacementByTumorDiamsTrim <- replacementByTumorDiamsTrim %>% relocate(sum_replacement_score_annot_group, .after = sum_replacement_score_annot)
+
+clinPatAnnotationData <- merge(clinPatAnnotationData, replacementByTumorDiamsTrim)
+```
+
+Final cleanup
+```{r }
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(age_ = age_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(num_tumors_ = num_tumors_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(max_tum_diameter = max_diameter_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(sum_tum_diameter = sum_diameter_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(marginal0 = marginal_group0)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(marginal1 = marginal_group1)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(marginal01 = marginal_group01)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_percent_report = tum_percent_report_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_score_report = sum_tumour_score_report_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_percent_annot_ = tum_percent_annot_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_score_annot_ = sum_tumour_score_annot_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(replacement = replacement_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(replacement_score = sum_replacement_score_annot_group)
+
+write.csv(clinPatAnnotationData, clinPatAnnotFn)
 ```
