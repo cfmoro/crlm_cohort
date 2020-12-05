@@ -28,10 +28,19 @@ clinPatAnnotData <- read.csv(clinPatAnnotFn)
 
 clinPatAnnotData$marginal0 <- fct_relevel(clinPatAnnotData$marginal0, "0", ">0")
 clinPatAnnotData$marginal01 <- fct_relevel(clinPatAnnotData$marginal01, "0", "<1", "1+")
+clinPatAnnotData$desmo10050 <- fct_relevel(clinPatAnnotData$desmo10050, "0-50", "50-100", "100")
 
 # IMPORTANT to uncomment according to desired analysis
-#clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "Y")
-clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "N")
+#cohort_type <- "All"
+#cohort_type <- "Neoadjuvant"
+cohort_type <- "Chemonaive"
+if(cohort_type == "Neoadjuvant") {
+  clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "Y")
+} else if(cohort_type == "Chemonaive") {
+  clinPatAnnotData <- clinPatAnnotData %>% filter(neoadjuvant == "N")
+} else if(cohort_type != "All") {
+  stop(paste("Wrong cohort type: ", cohort_type))
+}
 ```
 
 Parametrized survival function (to avoid code repetition)
@@ -43,6 +52,7 @@ survFun <- function(surv.object, grouping, fun.dat) {
   fit.dat <- eval.parent(expr)
   
 p <- ggsurvplot(fit.dat, data = fun.dat, 
+    title = paste(cohort_type, "patients"),
     xlab = "Days", 
     ylab = "Overall survival probability",
     pval = TRUE)  
@@ -99,17 +109,24 @@ survFun(survObjectOS, marginal01, clinPatAnnotData)
 # Tumor percent (Blazer classification) according to original pathology report or completed by review when missing
 survFun(survObjectOS, tum_percent_report, clinPatAnnotData)
 
-# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to original pathology report or completed by review when missing
-survFun(survObjectOS, tum_score_report, clinPatAnnotData)
-
-# Percent tumor, according to annotations (review)
+# Tumor percent (Blazer classification), according to annotations (review)
 survFun(survObjectOS, tum_percent_annot_, clinPatAnnotData)
-
-# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to annotations (review)
-survFun(survObjectOS, tum_score_annot_, clinPatAnnotData)
 
 # Replacement GP, according to annotations
 survFun(survObjectOS, replacement, clinPatAnnotData)
+
+# Desmo GP, according to annotations
+survFun(survObjectOS, desmo95, clinPatAnnotData)
+survFun(survObjectOS, desmo10050, clinPatAnnotData)
+```
+
+Experimental parameters
+```{r}
+# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to original pathology report or completed by review when missing
+survFun(survObjectOS, tum_score_report, clinPatAnnotData)
+
+# Summmed tumor score, calculated as the sum of % tumor cells x diameter, the former according to annotations (review)
+survFun(survObjectOS, tum_score_annot_, clinPatAnnotData)
 
 # Summmed replacement score, calculated as the sum of % replacement x diameter, the former according to annotations (review)
 survFun(survObjectOS, replacement_score, clinPatAnnotData)
@@ -119,7 +136,7 @@ Multivariate analysis (CCox proportional hazards model)
 ```{r, fig.width= 10}
 # Fit a Cox proportional hazards model
 # TODO: Study how this works and what parameter should be included
-fit.coxph <- coxph(survObjectOS ~ neoadjuvant + sex + sync_meta + age_ + num_tumors_ + max_tum_diameter + sum_tum_diameter + marginal0 + tum_percent_annot_ + replacement,
+fit.coxph <- coxph(survObjectOS ~ neoadjuvant + sex + sync_meta + age_ + num_tumors_ + max_tum_diameter + sum_tum_diameter + marginal0 + tum_percent_annot_ + desmo95,
                    data = clinPatAnnotData)
 ggforest(fit.coxph, data = clinPatAnnotData)
 ```

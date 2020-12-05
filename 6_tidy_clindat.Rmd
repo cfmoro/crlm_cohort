@@ -268,20 +268,30 @@ gpProbeOrig$annotation_types <- fct_relevel(gpProbeOrig$annotation_types, "P", "
 # Rename columns
 gpProbeOrig <- gpProbeOrig %>% rename(id = ids)
 
-# Initialize % of replacement for every tumor, so those with 0 % are captured in next filter
+# Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
 for(an_id in unique(gpProbeOrig$id)) {
   gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "R", length_um = 0, percent_gp = 0)
+  gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
 }
 
-# Derive % replacement per probe
+# Derive % replacement and desmo per probe
 gpProbeReplacement <- gpProbeOrig %>% group_by(id) %>% filter(annotation_types == "R" | annotation_types == "R2") %>% summarise(replacement_percent = sum(percent_gp) )
+gpProbeDesmo <- gpProbeOrig %>% group_by(id) %>% filter(annotation_types == "D") %>% summarise(desmo_percent = sum(percent_gp) )
 
 # Dichotomize % replacement
 table(gpProbeReplacement$replacement_percent)
 hist(gpProbeReplacement$replacement_percent)
 gpProbeReplacement <- gpProbeReplacement %>% mutate(replacement_group = ifelse(replacement_percent == 0, "0",
                                                                 ifelse(replacement_percent > 0 & replacement_percent < 50, "1-50", "50+")))
-gpProbeReplacement <- gpProbeReplacement %>% relocate(replacement_percent, .after = replacement_percent)
+#gpProbeReplacement <- gpProbeReplacement %>% relocate(replacement_percent, .after = replacement_percent)
+
+# Dichotomize % desmo
+table(gpProbeDesmo$desmo_percent)
+hist(gpProbeDesmo$desmo_percent)
+gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group95 = ifelse(desmo_percent >=95, "95+", "<95"))
+gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group10050 = ifelse(desmo_percent == 100, "100",
+                                                                ifelse(desmo_percent >= 50 & desmo_percent < 100, "50-100", "0-50")))
+
 ```
 
 Read and process annotation derived regression data
@@ -302,6 +312,7 @@ Merge annotation derived regression and GP data with clinPath data
 ```{r }
 clinPatAnnotationData <- merge(clinPatData, gpProbeReplacement, by = "id", all.x = TRUE)
 clinPatAnnotationData <- merge(clinPatAnnotationData, tumorPercentProbe, by = "id", all.x = TRUE)
+clinPatAnnotationData <- merge(clinPatAnnotationData, gpProbeDesmo, by = "id", all.x = TRUE)
 ```
 
 Weighted annotation derived regression
@@ -425,7 +436,7 @@ replacementByTumorDiamsTrim <- replacementByTumorDiamsTrim %>% relocate(sum_repl
 clinPatAnnotationData <- merge(clinPatAnnotationData, replacementByTumorDiamsTrim)
 ```
 
-Final cleanup
+Final cleanup 
 ```{r }
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(age_ = age_group)
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(num_tumors_ = num_tumors_group)
@@ -440,6 +451,8 @@ clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_percent_annot_ = t
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(tum_score_annot_ = sum_tumour_score_annot_group)
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(replacement = replacement_group)
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(replacement_score = sum_replacement_score_annot_group)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(desmo95 = desmo_group95)
+clinPatAnnotationData <- clinPatAnnotationData %>% rename(desmo10050 = desmo_group10050)
 
 write.csv(clinPatAnnotationData, clinPatAnnotFn)
 ```
