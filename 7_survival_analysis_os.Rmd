@@ -31,6 +31,13 @@ clinPatAnnotData$marginal01 <- fct_relevel(clinPatAnnotData$marginal01, "0", "<1
 clinPatAnnotData$desmo10050 <- fct_relevel(clinPatAnnotData$desmo10050, "0-50", "50-100", "100")
 
 # IMPORTANT to uncomment according to desired analysis
+#survival_type <- "OS" # Overall survival
+survival_type <- "PFS" # Progression free survival
+if(!(survival_type %in% c("OS", "PFS"))) {
+  stop(paste("Wrong survival type: ", survival_type))
+}
+
+# IMPORTANT to uncomment according to desired analysis
 #cohort_type <- "All"
 #cohort_type <- "Neoadjuvant"
 cohort_type <- "Chemonaive"
@@ -52,9 +59,9 @@ survFun <- function(surv.object, grouping, fun.dat) {
   fit.dat <- eval.parent(expr)
   
 p <- ggsurvplot(fit.dat, data = fun.dat, 
-    title = paste(cohort_type, "patients"),
+    title = paste(survival_type,"-", cohort_type, "patients"),
     xlab = "Days", 
-    ylab = "Overall survival probability",
+    ylab = "Survival probability",
     pval = TRUE)  
 
   print(fit.dat)
@@ -69,8 +76,16 @@ Survival analysis clinica data (Overall Survival)
 # https://www.datacamp.com/community/tutorials/survival-analysis-R
 # https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
 # https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
+
 # Fit survival data using the Kaplan-Meier method
-survObjectOS <- Surv(time = clinPatAnnotData$time_fu_os, event = clinPatAnnotData$status_fu_os)
+#survObjectOS <- Surv(time = clinPatAnnotData$time_fu_os, event = clinPatAnnotData$status_fu_os) # OS
+if(survival_type == "OS") {
+  survObjectOS <- Surv(time = clinPatAnnotData$time_fu_os, event = clinPatAnnotData$status_fu_os)
+} else if(survival_type == "PFS") {
+  survObjectOS <- Surv(time = clinPatAnnotData$time_fu_prog, event = clinPatAnnotData$status_fu_prog)
+}
+#survObjectOS <- Surv(time = ifelse(survival_type == "OS", clinPatAnnotData$time_fu_os, clinPatAnnotData$time_fu_prog), 
+#                     event = ifelse(survival_type == "OS", clinPatAnnotData$status_fu_os, clinPatAnnotData$status_fu_prog))
 survObjectOS
 
 # Overall
@@ -81,6 +96,9 @@ survFun(survObjectOS, age_, clinPatAnnotData)
 
 # Sex
 survFun(survObjectOS, sex, clinPatAnnotData)
+
+# Primary side
+survFun(survObjectOS, primary_side, clinPatAnnotData)
 
 # Sync/meta
 survFun(survObjectOS, sync_meta, clinPatAnnotData)
@@ -112,6 +130,10 @@ survFun(survObjectOS, tum_percent_report, clinPatAnnotData)
 # Tumor percent (Blazer classification), according to annotations (review)
 survFun(survObjectOS, tum_percent_annot_, clinPatAnnotData)
 
+# Predominant GP
+survFun(survObjectOS, gp_predo3, clinPatAnnotData)
+survFun(survObjectOS, gp_predo4, clinPatAnnotData)
+
 # Replacement GP, according to annotations
 survFun(survObjectOS, replacement, clinPatAnnotData)
 
@@ -130,13 +152,25 @@ survFun(survObjectOS, tum_score_annot_, clinPatAnnotData)
 
 # Summmed replacement score, calculated as the sum of % replacement x diameter, the former according to annotations (review)
 survFun(survObjectOS, replacement_score, clinPatAnnotData)
+
+# % Replacement 2 vs 1 (for cases with replacement)
+survFun(survObjectOS, r2_group, clinPatAnnotData)
 ```
 
 Multivariate analysis (CCox proportional hazards model)
 ```{r, fig.width= 10}
 # Fit a Cox proportional hazards model
 # TODO: Study how this works and what parameter should be included
-fit.coxph <- coxph(survObjectOS ~ neoadjuvant + sex + sync_meta + age_ + num_tumors_ + max_tum_diameter + sum_tum_diameter + marginal0 + tum_percent_annot_ + desmo95,
+fit.coxph <- coxph(survObjectOS ~ desmo95 + primary_side + num_tumors_ + max_tum_diameter + marginal0,
                    data = clinPatAnnotData)
 ggforest(fit.coxph, data = clinPatAnnotData)
+```
+
+Relevant case series
+```{r}
+untreated <- clinPatAnnotData %>% filter(neoadjuvant == "N") %>% arrange(desc(desmo_percent))
+head(select(untreated, id, desmo_percent, time_fu_os, status_fu_os), n= 8)
+
+treated <- clinPatAnnotData %>% filter(neoadjuvant == "Y") %>% arrange(desc(desmo_percent))
+head(select(treated, id, desmo_percent, time_fu_os, status_fu_os), n= 16)
 ```

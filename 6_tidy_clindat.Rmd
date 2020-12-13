@@ -52,14 +52,15 @@ Import data
 
 # Read excel file
 clinData <- read_excel(clinDataFn, n_max = 54, col_types = c(
-  "numeric", "date", "text", "skip", "skip", "skip", "skip", "skip", "skip", "skip",
+  "numeric", "date", "text", "skip", "text", "skip", "skip", "skip", "skip", "skip",
   "skip", "date", "skip", "skip", "skip", "skip", "skip", "date", "text", "skip",
   "date", "skip", "date", "skip", "skip", "text", "text", "skip", "skip", "skip",
   rep("skip", 16), "date"))
 
 # Rename columns with easy and concise names: rename(flights, tail_num = tailnum)
 (nms <- names(clinData))
-clinData <- rename(clinData, id = "PaRaMet pseudonym", date_birth = dob, date_liver_op = "date of liver op", date_death = "date of death", 
+clinData <- rename(clinData, id = "PaRaMet pseudonym", date_birth = dob, primary_side = "location of primary (left/right)",
+                   date_liver_op = "date of liver op", date_death = "date of death", 
                    cancer_death = "Cancer Related Death (Y/N/U, unclear)", date_progression = "date of progression/recidive", 
                    date_progression_liver = "date of progression in liver", neoadjuvant = "neoadjuvant (Y/N)", sync_meta = "sync/meta (s/m)",
                    date_lost_follow_up = "lost for follow up")
@@ -75,6 +76,7 @@ clinData <- clinData %>% relocate(neoadjuvant, .after = sync_meta)
 (nms <- names(clinData))
 
 # Convert character values as factors or logical
+clinData$primary_side <- as.factor(clinData$primary_side) 
 clinData$sync_meta <- as.factor(clinData$sync_meta) # S(ynchronous) / M(etachronous)
 clinData$sync_meta <- fct_relevel(clinData$sync_meta, "M", "S")
 
@@ -89,9 +91,16 @@ clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
 # MOST IMPORTANT FOR SURV ANALYSYS, ALWAYS CHECK
 fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu_os = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_os = 1)
 fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_os = 0)
-fuLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_os = 0)
+fuLostOS <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_os = 0)
 
-clinSurvData <- rbind(fuDeath, fuAlive, fuLost)
+fuProgress <- clinData %>% filter(!is.na(date_progression)) %>% mutate(time_fu_prog = as.double(difftime(date_progression, date_liver_op, units = c("days"))), status_fu_prog = 1)
+fuProgFree <- clinData %>% filter(is.na(date_progression) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog = 0)
+fuProgLost <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog = 0)
+
+clinSurvDataOS <- rbind(fuDeath, fuAlive, fuLostOS)
+clinSurvDataPFS <- rbind(fuProgress, fuProgFree, fuProgLost)
+
+clinSurvData <- merge(clinSurvDataOS, select(clinSurvDataPFS, id, time_fu_prog, status_fu_prog))
 
 
 #' Calculate age
@@ -268,15 +277,36 @@ gpProbeOrig$annotation_types <- fct_relevel(gpProbeOrig$annotation_types, "P", "
 # Rename columns
 gpProbeOrig <- gpProbeOrig %>% rename(id = ids)
 
+# Classify each probe accordibng to predominant GP (4 cartegories)
+gpPredominant4 <- gpProbeOrig %>% group_by(id) %>% slice_max(percent_gp) %>% select(id, annotation_types)
+gpPredominant4 <- gpPredominant4 %>% rename(gp_predo4 = annotation_types)
+
+# Classify each probe accordibng to predominant GP (3 cartegories)
+gPredoDesmoPushing <- gpProbeOrig %>% filter(annotation_types %in% c("D", "P")) %>% select(-length_um)
+gPredoRepl12 <- gpProbeOrig %>% filter(annotation_types %in% c("R", "R2"))
+gPredoRepl <- gPredoRepl12 %>% group_by(id) %>% summarise(annotation_types = "R", percent_gp = sum(percent_gp))
+
+gpPredominant3 <- rbind(gPredoDesmoPushing, gPredoRepl) %>% group_by(id) %>% slice_max(percent_gp) %>% select(id, annotation_types)
+gpPredominant3 <- gpPredominant3 %>% rename(gp_predo3 = annotation_types)
+
 # Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
 for(an_id in unique(gpProbeOrig$id)) {
   gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "R", length_um = 0, percent_gp = 0)
+  gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "R2", length_um = 0, percent_gp = 0)
   gpProbeOrig <- gpProbeOrig %>% add_row(id = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
 }
 
 # Derive % replacement and desmo per probe
 gpProbeReplacement <- gpProbeOrig %>% group_by(id) %>% filter(annotation_types == "R" | annotation_types == "R2") %>% summarise(replacement_percent = sum(percent_gp) )
 gpProbeDesmo <- gpProbeOrig %>% group_by(id) %>% filter(annotation_types == "D") %>% summarise(desmo_percent = sum(percent_gp) )
+
+# Derive % replavement 1 vs 2
+gpProbeRepl12 <- gpProbeOrig %>% filter(annotation_types == "R" | annotation_types == "R2") %>% group_by(id, annotation_types) %>% summarise(sum_percent_gp = sum(percent_gp))
+gpProbeRepl12No0 <- gpProbeRepl12 %>% group_by(id) %>% filter(sum(sum_percent_gp) > 0)
+gpProbeRepl12Percent <- gpProbeRepl12No0 %>% group_by(id) %>% mutate(percent_repl = 100 / sum(sum_percent_gp) * sum_percent_gp)
+gpRepl2PercentR2 <- gpProbeRepl12Percent %>% filter(annotation_types == "R2")
+gpRepl2PercentR2Trim <- gpRepl2PercentR2 %>% select(id, percent_repl)
+gpRepl2PercentR2Trim <- gpRepl2PercentR2Trim %>% rename(percent_r2 = percent_repl)
 
 # Dichotomize % replacement
 table(gpProbeReplacement$replacement_percent)
@@ -292,6 +322,10 @@ gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group95 = ifelse(desmo_percent >=9
 gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group10050 = ifelse(desmo_percent == 100, "100",
                                                                 ifelse(desmo_percent >= 50 & desmo_percent < 100, "50-100", "0-50")))
 
+# Dichotomize % replacement2
+table(gpRepl2PercentR2Trim$percent_r2)
+hist(gpRepl2PercentR2Trim$percent_r2)
+gpRepl2PercentR2Trim <- gpRepl2PercentR2Trim %>% mutate(r2_group = ifelse(percent_r2 >=50, "50+", "<50"))
 ```
 
 Read and process annotation derived regression data
@@ -313,6 +347,9 @@ Merge annotation derived regression and GP data with clinPath data
 clinPatAnnotationData <- merge(clinPatData, gpProbeReplacement, by = "id", all.x = TRUE)
 clinPatAnnotationData <- merge(clinPatAnnotationData, tumorPercentProbe, by = "id", all.x = TRUE)
 clinPatAnnotationData <- merge(clinPatAnnotationData, gpProbeDesmo, by = "id", all.x = TRUE)
+clinPatAnnotationData <- merge(clinPatAnnotationData, gpRepl2PercentR2Trim, by = "id", all.x = TRUE)
+clinPatAnnotationData <- merge(clinPatAnnotationData, gpPredominant4, by = "id", all.x = TRUE)
+clinPatAnnotationData <- merge(clinPatAnnotationData, gpPredominant3, by = "id", all.x = TRUE)
 ```
 
 Weighted annotation derived regression
@@ -368,7 +405,7 @@ hist(tumPercentByTumorDiamsTrim$sum_tumour_score_annot)
 tumPercentByTumorDiamsTrim <- tumPercentByTumorDiamsTrim %>% mutate(sum_tumour_score_annot_group = ifelse(sum_tumour_score_annot >= 250, "250+", "<250"))
 tumPercentByTumorDiamsTrim <- tumPercentByTumorDiamsTrim %>% relocate(sum_tumour_score_annot_group, .after = sum_tumour_score_annot)
 
-clinPatAnnotationData <- merge(clinPatAnnotationData, tumPercentByTumorDiamsTrim)
+clinPatAnnotationData <- merge(clinPatAnnotationData, tumPercentByTumorDiamsTrim, all.x = TRUE)
 ```
 
 Merge annotation derived regression data with clinPath data
@@ -433,7 +470,7 @@ replacementByTumorDiamsTrim <- replacementByTumorDiamsTrim %>% mutate(sum_replac
                                                                 ifelse(sum_replacement_score_annot > 0 & sum_replacement_score_annot < 150, "1-150", "150+")))
 replacementByTumorDiamsTrim <- replacementByTumorDiamsTrim %>% relocate(sum_replacement_score_annot_group, .after = sum_replacement_score_annot)
 
-clinPatAnnotationData <- merge(clinPatAnnotationData, replacementByTumorDiamsTrim)
+clinPatAnnotationData <- merge(clinPatAnnotationData, replacementByTumorDiamsTrim, all.x = TRUE)
 ```
 
 Final cleanup 
@@ -454,5 +491,5 @@ clinPatAnnotationData <- clinPatAnnotationData %>% rename(replacement_score = su
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(desmo95 = desmo_group95)
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(desmo10050 = desmo_group10050)
 
-write.csv(clinPatAnnotationData, clinPatAnnotFn)
+write.csv(clinPatAnnotationData, clinPatAnnotFn, row.names = FALSE)
 ```
