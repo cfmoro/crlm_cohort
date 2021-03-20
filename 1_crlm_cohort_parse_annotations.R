@@ -103,7 +103,7 @@ parse_geometry_data <- function(ndpa_file) {
     
     if(annotation_type_val == "AnnotateFreehandLine") {
       # Sanity check
-      if (!(title_val %in% c("R", "r", "R2", "r2", "D", "d", "P", "p"))) {
+      if (!(title_val %in% c("R", "r", "R1", "r1", "R2", "r2", "D", "d", "P", "p"))) {
         warning(paste("Wrong inv front annotation label: In file: ", ndpa_file, "; id: ", id_val, "; title_val", title_val))
         next
       }
@@ -113,6 +113,9 @@ parse_geometry_data <- function(ndpa_file) {
       
       # Complete setting of final values
       ann_type <- str_to_upper(title_val)
+      if(ann_type == 'R1') {
+        ann_type <- 'R'
+      }
       ann_percent <- NA
     } else if(annotation_type_val == "AnnotatePointer") {
       # Sanity check

@@ -21,15 +21,17 @@ library(survminer)
 
 ```{r}
 workDir <- "/home/bibu/Workspace/crlm_cohort/"
-clinDataFn <- paste(workDir, "datasets/CRLM_clin_cohort.xlsx", sep="")
-patDataFn <- paste(workDir, "datasets/CRLM_KS_cohort_pathology_200904.xlsx", sep="")
+clinDataFn <- paste(workDir, "datasets/CRLM_clin_cohort_210315.xlsx", sep="")
+patDataFn1 <- paste(workDir, "datasets/CRLM_KS_cohort_pathology_Evelina.xlsx", sep="") # Evelina: CRLM_KS_cohort_pathology_Evelina (200904) # Lorand (210309)
+patDataFn2 <- paste(workDir, "datasets/CRLM_KS_cohort_pathology_Lorand.xlsx", sep="")
 gpProbeFn <- paste(workDir, "output/gp_annotations_by_probe.csv", sep="")
 tumorPercentProbeFn <- paste(workDir, "output/regression_by_probe.csv", sep="")
 clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
 tumorPercentTumorFn <- paste(workDir, "output/regression_by_tumor.csv", sep="")
 gpAnnotationsTumorFn <- paste(workDir, "output/gp_annotations_by_tumor.csv", sep="")
 
-dateEndFu <- as.Date("2020-10-29") # Current date of end follow up for study
+dateEndFu <- as.Date("2021-03-08") # Initial Evelina's cohort as.Date("2020-10-29") # Current date of end follow up for study
+# Obs, check that survival data is updated to the last date for previous (Evelina's) cohort
 ```
 
 Import data
@@ -51,11 +53,11 @@ Import data
 # "lost.for.follow.up"
 
 # Read excel file
-clinData <- read_excel(clinDataFn, n_max = 54, col_types = c(
+clinData <- read_excel(clinDataFn, col_types = c(
   "numeric", "date", "text", "skip", "text", "skip", "skip", "skip", "skip", "skip",
   "skip", "date", "skip", "skip", "skip", "skip", "skip", "date", "text", "skip",
   "date", "skip", "date", "skip", "skip", "text", "text", "skip", "skip", "skip",
-  rep("skip", 16), "date"))
+  rep("skip", 16), "date", rep("skip",46)))
 
 # Rename columns with easy and concise names: rename(flights, tail_num = tailnum)
 (nms <- names(clinData))
@@ -65,6 +67,15 @@ clinData <- rename(clinData, id = "PaRaMet pseudonym", date_birth = dob, primary
                    date_progression_liver = "date of progression in liver", neoadjuvant = "neoadjuvant (Y/N)", sync_meta = "sync/meta (s/m)",
                    date_lost_follow_up = "lost for follow up")
 (nms <- names(clinData))
+
+# Filter Evelina or Danyil cohort
+#clinData <- clinData %>% filter(id < 60) # Evelina
+# Remove wrong rows
+clinData <- clinData %>% filter(!id %in% c(11, NA))
+
+clinData <- clinData # %>% filter(id >= 59) # Evelina < 59, Lorand-Danyil >= 59
+# Remove wrong rows
+#clinData <- clinData %>% filter(!id %in% c(61, 70)) # TODO find personnummer id 70
 
 # Reorder columns
 clinData <- clinData %>% relocate(sex, .after = id)
@@ -136,17 +147,24 @@ clinSurvData <- clinSurvData %>% relocate(age_group, .after = age)
 
 Merge clinical with pathology report data
 ```{r}
-# Peek at column names in CRLM_KS_cohort_pathology_200904
-(nms <- names(read_excel(patDataFn, n_max = 0, skip = 2)))
+# Peek at column names in CRLM_KS_cohort_pathology
+(nms <- names(read_excel(patDataFn1, n_max = 0)))
+(nms <- names(read_excel(patDataFn2, n_max = 0)))
 
 # Read pathology report data
-patDataOrig <- read_excel(patDataFn, n_max = 58, skip = 2, col_types = c(
-  "skip", "numeric", "skip", "numeric", "text", 
-  rep(c("numeric", rep("skip", 6), "numeric", "numeric"),3),
-  "skip",
-  rep(c("numeric", rep("skip", 6), "numeric", "numeric"),13)))
+# Evelina's dataset
+patDataOrig1 <- read_excel(patDataFn1, col_types = c(
+  "skip", "numeric", "skip", "numeric", "text",  rep("skip", 8),
+  rep(c("numeric", "skip", "numeric", "numeric"), 16)
+  ))
+# Lorand's dataset
+patDataOrig2 <- read_excel(patDataFn2, col_types = c(
+  "skip", "numeric", "skip", "numeric", "text",  rep("skip", 8),
+  rep(c("numeric", "skip", "numeric", "numeric"), 16)
+  ))
 
-# TODO: Fix incorrect diameters in rows nr 5, 10, 14, 17
+# Merge Evelina's and Lorand's pathology datasets
+patDataOrig <- rbind(patDataOrig1, patDataOrig2)
 
 # Complete missing tumor % orig with review
 patDataTemp <- patDataOrig %>% mutate('tumor_a_percent_tumor (%)' = ifelse(is.na(`tumor_a_percent_tumor_orig (%)`), `tumor_a_percent_tumor_review (%)`, `tumor_a_percent_tumor_orig (%)`))
@@ -363,6 +381,16 @@ tumPercentByTumorWide <- tumPercentByTumor %>% pivot_wider(names_from = tumors, 
 tumPercentByTumorWide <- tumPercentByTumorWide %>% rename(id = "ids")
 tumPercentByTumorDiams <- merge(tumPercentByTumorWide, tumDiameters, by = "id")
 
+# Check needed columns exist, create otherwise
+percent_tum_ann_col_names <- c("%_tum_ann_g", "%_tum_ann_h", "%_tum_ann_i", "%_tum_ann_j", "%_tum_ann_k", "%_tum_ann_l", "%_tum_ann_m", "%_tum_ann_n", "%_tum_ann_o", "%_tum_ann_p")
+for(a_col_name in percent_tum_ann_col_names) {
+  if(!(a_col_name %in% colnames(tumPercentByTumorDiams))) {
+    tumPercentByTumorDiams <-tumPercentByTumorDiams %>% add_column({{a_col_name}} := NA) 
+  }
+}
+
+# TODO refactor repetitive tidyverse code using https://www.tidyverse.org/blog/2019/06/rlang-0-4-0/
+# https://github.com/rstudio/cheatsheets/blob/master/tidyeval.pdf
 # Set aside % tumor and largest diameter for easier visual assessment
 tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_a_largest_diameter (cm)`, .after = `%_tum_ann_a`)
 tumPercentByTumorDiams <- tumPercentByTumorDiams %>% relocate(`tumor_b_largest_diameter (cm)`, .after = `%_tum_ann_b`)
@@ -427,6 +455,15 @@ replacementByTumorWide <- replacementByTumor %>% pivot_wider(names_from = tumors
 replacementByTumorWide <- replacementByTumorWide %>% rename(id = "ids")
 replacementByTumorDiams <- merge(replacementByTumorWide, tumDiameters, by = "id")
 
+# Check needed columns exist, create otherwise
+replacement_tum_ann_col_names <- c("replacement_tum_ann_g", "replacement_tum_ann_h", "replacement_tum_ann_i", "replacement_tum_ann_j", "replacement_tum_ann_k", "replacement_tum_ann_l", "replacement_tum_ann_m", "replacement_tum_ann_n", "replacement_tum_ann_o", "replacement_tum_ann_p")
+for(a_col_name in replacement_tum_ann_col_names) {
+  if(!(a_col_name %in% colnames(replacementByTumorDiams))) {
+    replacementByTumorDiams <-replacementByTumorDiams %>% add_column({{a_col_name}} := NA) 
+  }
+}
+
+# TODO refactor repetitive tidyverse code using https://www.tidyverse.org/blog/2019/06/rlang-0-4-0/
 # Set aside % tumor and largest diameter for easier visual assessment
 replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_a_largest_diameter (cm)`, .after = `replacement_tum_ann_a`)
 replacementByTumorDiams <- replacementByTumorDiams %>% relocate(`tumor_b_largest_diameter (cm)`, .after = `replacement_tum_ann_b`)

@@ -130,9 +130,18 @@ survFun(survObjectOS, tum_percent_report, clinPatAnnotData)
 # Tumor percent (Blazer classification), according to annotations (review)
 survFun(survObjectOS, tum_percent_annot_, clinPatAnnotData)
 
-# Predominant GP
+# Predominant GP (D, R, P)
 survFun(survObjectOS, gp_predo3, clinPatAnnotData)
 survFun(survObjectOS, gp_predo4, clinPatAnnotData)
+
+# Predominant GP (D, R)
+clinPatAnnotDataNoP <- filter(clinPatAnnotData, gp_predo3 != 'P')
+if(survival_type == "OS") {
+  survObjectOSNoP <- Surv(time = clinPatAnnotDataNoP$time_fu_os, event = clinPatAnnotDataNoP$status_fu_os)
+} else if(survival_type == "PFS") {
+  survObjectOSNoP <- Surv(time = clinPatAnnotDataNoP$time_fu_prog, event = clinPatAnnotDataNoP$status_fu_prog)
+}
+survFun(survObjectOSNoP, gp_predo3, clinPatAnnotDataNoP)
 
 # Replacement GP, according to annotations
 survFun(survObjectOS, replacement, clinPatAnnotData)
@@ -161,7 +170,12 @@ Multivariate analysis (CCox proportional hazards model)
 ```{r, fig.width= 10}
 # Fit a Cox proportional hazards model
 # TODO: Study how this works and what parameter should be included
-fit.coxph <- coxph(survObjectOS ~ desmo95 + primary_side + num_tumors_ + max_tum_diameter + marginal0,
+# OS All fit.coxph <- coxph(survObjectOS ~ age + num_tumors_ + max_tum_diameter + marginal01 + desmo95 + tum_score_annot_,
+# OS Neoadj fit.coxph <- coxph(survObjectOS ~ age + num_tumors_ + max_tum_diameter + marginal01 + gp_predo3 + tum_score_annot_,
+# OS Chemonaive fit.coxph <- coxph(survObjectOS ~ age + num_tumors_ + max_tum_diameter + tum_score_report,
+# PFS All fit.coxph <- coxph(survObjectOS ~ age + sum_tum_diameter + marginal1 + desmo95 + tum_score_annot_,
+# PFS Neoadj
+fit.coxph <- coxph(survObjectOS ~ age + gp_predo3,
                    data = clinPatAnnotData)
 ggforest(fit.coxph, data = clinPatAnnotData)
 ```
