@@ -161,7 +161,7 @@ for(out_file in out_files) {
   unlink(paste(out_dir, "/parsed_annotations/", out_file, sep=""))
 }
 
-# Set up logging
+# Set up logging - Obs for this to work execute the script by selecting all + CrlEnter, and NOT by CtrAlt-R
 log_file_name <- paste(out_dir, "/parsed_annotations/errors.txt", sep="")
 log_file <- file(log_file_name, open="wt")
 sink(log_file, type="message")
