@@ -1,5 +1,5 @@
 ---
-title: "5_explore_regression"
+title: "6_explore_regression"
 output: html_document
 ---
 
@@ -9,6 +9,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r }
 library(tidyverse)
 library(ggplot2)
+library(rstatix)
+library(ggpubr)
 ```
 
 ```{r }
@@ -16,43 +18,161 @@ base_dir <-"/home/bibu/Workspace/crlm_cohort/output"
 regression_slide_fn <- paste(base_dir, "/regression_by_slide.csv", sep="")
 regression_tumor_fn <- paste(base_dir, "/regression_by_tumor.csv", sep="")
 regression_probe_fn <- paste(base_dir, "/regression_by_probe.csv", sep="")
-```
 
-### Regression by slide
-```{r }
-regression_slide <- read.csv(regression_slide_fn, row.names=NULL)
-regression_slide <- regression_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-"))
+clinPatAnnotFn <- paste(base_dir, "/clin_data_annot.csv", sep="")
+
+is_detailed = FALSE # TRUE For plotting separately every tumor and probe
 ```
 
 ```{r}
-plots <- regression_slide %>% group_by(ids) %>% do( plots =
-  ggplot(data = ., aes(x = slide_name, y = percents))+ geom_bar(stat="identity") + expand_limits(y = 100) +
-    ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + facet_wrap(~ tumors, scales = "free_x")
-)
+# Read information on neoadjuvant treatment
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+neoadj_data <- clinPatAnnotData %>% select(id, neoadjuvant) %>% rename(ids = id)
+```
 
-for(p in plots$plots) {print(p)}
+# Common functions
+```{r }
+descr_regression <- function(regression_data) {
+
+# Summary stats all
+print(regression_data %>% get_summary_stats(avg_percent, type = "full", show = c("n", "median", "mean", "min", "max", "iqr", "sd")))
+  
+# Summary stats by neoajuvant
+print(regression_data %>% group_by(neoadjuvant) %>% get_summary_stats(avg_percent, type = "full", show = c("n", "median", "mean", "min", "max", "iqr", "sd")))
+
+# Density plots
+# All 
+# https://www.datanovia.com/en/lessons/wilcoxon-test-in-r/ : The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median.
+# This can be checked by visual inspection using histogram and density distribution. In the situation where your data is not symmetrically distributed, 
+# you could consider performing a sign test, instead of running the Wilcoxon signed-rank test: https://www.datanovia.com/en/lessons/wilcoxon-test-in-r/
+# The sign test is used to compare the medians of ***paired or matched*** observations
+p <- ggdensity(data = regression_data, x = "avg_percent", rug = TRUE, fill = "lightgray", title = "All") + 
+  scale_x_continuous(limits = c(0, 100)) +
+  stat_central_tendency(type = "median", color = "red", linetype = "dashed") 
+print(p)
+# By neoadjuvant
+p <- ggdensity(data = filter(regression_data, !is.na(neoadjuvant)), x = "avg_percent", rug = TRUE, fill = "lightgray") + 
+  scale_x_continuous(limits = c(0, 100)) +
+  stat_central_tendency(type = "median", color = "red", linetype = "dashed") +
+  facet_wrap( ~ neoadjuvant, ncol = 1) 
+print(p)
+
+# Box plots all
+p <- ggplot(data = regression_data) + geom_boxplot(mapping = aes(x = "avg_percent", y = avg_percent)) + ggtitle("all") + theme_bw()   
+print(p)
+
+# Neoajd vs chemonaive
+# Shapiro test for normality
+shap <- regression_data %>% shapiro_test(avg_percent)
+print(paste0("Shapiro test:", shap))
+
+# Comparisons between untreated and treated conditions for the tissue slices
+# Paired Wilcox-test is used because lack of normality
+stat.test <- regression_data %>%
+  wilcox_test(
+    avg_percent ~ neoadjuvant, paired = FALSE)
+print(stat.test)
+
+# Add statistical test p-values
+# Create the plot
+bxp <- ggboxplot(
+  filter(regression_data, !is.na(neoadjuvant)), x = "neoadjuvant", y = "avg_percent",
+  color = "neoadjuvant", palette = "jco"
+  )
+# Add statistical test p-values
+stat.test1 <- stat.test %>% add_xy_position(x = "")
+p <- bxp + stat_pvalue_manual(label = "p={round(p.adj,3)} {p.adj.signif}",
+  stat.test1, tip.length = 0) 
+print(p)
+
+# Effect sizes
+eff_size <- regression_data %>%
+  wilcox_effsize(
+    avg_percent ~ neoadjuvant, paired = FALSE)
+print(eff_size)
+}
+```
+
+### Regression by probe
+```{r }
+regression_probe <- read.csv(regression_probe_fn, row.names=NULL)
+regression_probe$ids <- as.factor(regression_probe$ids)
+
+# Merge neoadj data
+regression_probe <- merge(regression_probe, neoadj_data, by = "ids", all.x = TRUE)
+
+# Descriptive stats
+descr_regression(regression_probe)
+
+# All, sorted by decresing order of viable tumor
+sorted_regression_probe <- arrange(regression_probe, desc(avg_percent)) %>% mutate(ids = factor(ids, unique(ids)))
+ggplot(data = sorted_regression_probe , aes(x = ids, y = avg_percent)) + geom_col() +
+  expand_limits(y = 100) + ggtitle("All")
+# By neoadjuvant
+ggplot(data = filter(sorted_regression_probe, !is.na(neoadjuvant)), aes(x = ids, y = avg_percent))+ geom_col() + expand_limits(y = 100) +  facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x") 
 ```
 
 ### Regression by tumor
 ```{r }
 regression_tumor <- read.csv(regression_tumor_fn, row.names=NULL)
 regression_tumor <- regression_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-"))
+
+# Merge neoadj data
+regression_tumor <- merge(regression_tumor, neoadj_data, by = "ids", all.x = TRUE)
+
+# Descriptive stats
+descr_regression(regression_tumor)
+
+# Add regression by probe, for sorting in plot
+regression_tumor <- regression_tumor %>% rowwise() %>% mutate(avg_percent_probe = regression_probe[ regression_probe$ids == ids, ]$avg_percent)
+
+# All
+sorted_regression_tumor <- regression_tumor %>% arrange(desc(avg_percent_probe), desc(avg_percent)) %>% mutate(tumor_name = factor(tumor_name, unique(tumor_name)))
+ggplot(data = sorted_regression_tumor, aes(x = tumor_name, y = avg_percent)) + geom_col() + expand_limits(y = 100)
+# By neoadjuvant
+ggplot(data = filter(sorted_regression_tumor, !is.na(neoadjuvant)), aes(x = tumor_name, y = avg_percent)) + geom_col() +
+    expand_limits(y = 100) +  facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x") 
+
+# Old detailed plots
+if(is_detailed) {
+  plots <- regression_tumor %>% group_by(ids) %>% do( plots =
+    ggplot(data = ., aes(x = tumor_name, y = avg_percent))+ geom_bar(stat="identity") + expand_limits(y = 100) +
+      ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) 
+  )
+  for(p in plots$plots) {print(p)}
+}
 ```
 
-```{r}
-plots <- regression_tumor %>% group_by(ids) %>% do( plots =
-  ggplot(data = ., aes(x = tumor_name, y = avg_percent))+ geom_bar(stat="identity") + expand_limits(y = 100) +
-    ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) 
-)
 
-for(p in plots$plots) {print(p)}
-```
-
-### Regression by probe
+### Regression by slide
 ```{r }
-regression_probe <- read.csv(regression_probe_fn, row.names=NULL)
-```
+regression_slide <- read.csv(regression_slide_fn, row.names=NULL)
+regression_slide <- regression_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-"))
+regression_slide <- regression_slide %>% mutate(tumor_name = paste(ids, tumors, sep="-"))
 
-```{r}
-ggplot(data = regression_probe, aes(x = ids, y = avg_percent))+ geom_bar(stat="identity") + expand_limits(y = 100)
+# Merge neoadj data
+regression_slide <- merge(regression_slide, neoadj_data, by = "ids", all.x = TRUE)
+
+# Descriptive stats
+descr_regression(rename(regression_slide, avg_percent = percents))
+
+# Add regression by probe and by tumor, for sorting in plot
+regression_slide <- regression_slide %>% rowwise() %>% mutate(avg_percent_probe = regression_probe[ regression_probe$ids == ids, ]$avg_percent)
+regression_slide <- regression_slide %>% rowwise() %>% mutate(avg_percent_tumor = regression_tumor[ regression_tumor$tumor_name == tumor_name, ]$avg_percent)
+
+# All
+sorted_regression_slide <- regression_slide %>% arrange(desc(avg_percent_probe), desc(avg_percent_tumor), desc(percents)) %>% mutate(slide_name = factor(slide_name, unique(slide_name)))
+ggplot(data = sorted_regression_slide, aes(x = slide_name, y = percents)) + geom_col() + expand_limits(y = 100)
+# By neoadjuvant
+ggplot(data = filter(sorted_regression_slide, !is.na(neoadjuvant)), aes(x = slide_name, y = percents)) + geom_col() +
+    expand_limits(y = 100) + facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x") 
+
+# Old detailed plots
+if(is_detailed) {
+  plots <- regression_slide %>% group_by(ids) %>% do( plots =
+    ggplot(data = ., aes(x = slide_name, y = percents))+ geom_bar(stat="identity") + expand_limits(y = 100) +
+      ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + facet_wrap(~ tumors, scales = "free_x")
+  )
+  for(p in plots$plots) {print(p)}
+}
 ```

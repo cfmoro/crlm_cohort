@@ -1,5 +1,5 @@
 ---
-title: "4_explore_inv_front"
+title: "5_explore_inv_front"
 output: html_document
 ---
 
@@ -7,9 +7,13 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Generated on: `r Sys.time()`
+
 ```{r }
 library(tidyverse)
 library(ggplot2)
+library(ggpubr)
+library(rstatix)
 ```
 
 ```{r }
@@ -17,54 +21,281 @@ base_dir <-"/home/bibu/Workspace/crlm_cohort/output"
 gp_slide_fn <- paste(base_dir, "/gp_annotations_by_slide.csv", sep="")
 gp_tumor_fn <- paste(base_dir, "/gp_annotations_by_tumor.csv", sep="")
 gp_probe_fn <- paste(base_dir, "/gp_annotations_by_probe.csv", sep="")
-```
 
-### GPs by slide
-```{r }
-gp_slide <- read.csv(gp_slide_fn, row.names=NULL)
-gp_slide <- gp_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-"))
-gp_slide$annotation_types <- factor(gp_slide$annotation_types, levels = c("P", "D","R2", "R") )
+clinPatAnnotFn <- paste(base_dir, "/clin_data_annot.csv", sep="")
+
+is_r1_2 = FALSE # TRUE # Wether replacement should be spli into type 1 and 2 categories
+
+annot_types <- c()
+my_colors <- c()
+if(is_r1_2) {
+  annot_types <- c("D", "P","R2","R")
+  myColors <- c("green", "blue",  "orange", "red")  
+} else {
+  annot_types <- c("D", "P", "R")
+  myColors <- c("green", "blue", "red")  
+}
+
+is_detailed = FALSE # TRUE For plotting separately every tumor and probe
 ```
 
 Configure palete for plots
 ```{r}
-myColors <- c("blue", "green", "orange", "red")
-names(myColors) <- levels(gp_slide$annotation_types)
-colScale <- scale_colour_manual(name = "annotation_types",values = myColors)
+names(myColors) <- annot_types
+colScale <- scale_colour_manual(name = "annotation_types", values = myColors)
 ```
 
 ```{r}
-plots <- gp_slide %>% group_by(ids) %>% do( plots =
-  ggplot(data = ., aes(x = slide_name, y = percent_gp, fill = annotation_types))+ geom_bar(stat="identity") + scale_fill_manual(name = "annotation_types",values = myColors) +
-    ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="GPs")) + facet_wrap(~ tumors, scales = "free_x")
-)
-
-for(p in plots$plots) {print(p)}
+# Read information on neoadjuvant treatment
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+neoadj_data <- clinPatAnnotData %>% select(id, neoadjuvant) %>% rename(ids = id)
 ```
 
-### GPs by tumor
-```{r }
-gp_tumor <- read.csv(gp_tumor_fn, row.names=NULL)
-gp_tumor <- gp_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-"))
-gp_tumor$annotation_types <- factor(gp_tumor$annotation_types, levels = c("P", "D","R2", "R") )
-```
+# Common functions
+```{r echo = TRUE}
+descr_gps <- function(gp_data) {
 
-```{r}
-plots <- gp_tumor %>% group_by(ids) %>% do( plots =
-  ggplot(data = ., aes(x = tumor_name, y = percent_gp, fill = annotation_types))+ geom_bar(stat="identity") + scale_fill_manual(name = "annotation_types",values = myColors) +
-    ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="GPs")) 
-)
+# Summary statistics
+# Total GP percentages
+print(gp_data %>% group_by(annotation_types) %>% summarise(percent_all = 100 / sum(gp_data$percent_gp) * sum(percent_gp)))
+print(filter(gp_data, neoadjuvant == "N") %>% group_by(annotation_types) %>% summarise(percent_chemonaive = 100 / sum(.$percent_gp) * sum(percent_gp)))
+print(filter(gp_data, neoadjuvant == "Y") %>% group_by(annotation_types) %>% summarise(percent_neoadjuvant = 100 / sum(.$percent_gp) * sum(percent_gp)))
 
-for(p in plots$plots) {print(p)}
+# GP summaries all and by neoajuvant
+print(gp_data %>% group_by(annotation_types) %>% get_summary_stats(percent_gp, type = "full", show = c("n", "median", "mean", "min", "max", "iqr", "sd")))
+print(gp_data %>% group_by(neoadjuvant, annotation_types) %>% get_summary_stats(percent_gp, type = "full", show = c("n", "median", "mean", "min", "max", "iqr", "sd")))
+
+# Density plots
+# All
+p <- ggplot(data = gp_data) + geom_density(mapping = aes(x = percent_gp, color = annotation_types)) + 
+    scale_color_manual(name = "annotation_types",values = myColors) +
+    ggtitle("all") +  theme_bw() 
+print(p)
+
+# By GP
+p <- ggdensity(data = gp_data, x = "percent_gp", rug = TRUE) + 
+  scale_x_continuous(limits = c(0, 100)) +
+  stat_central_tendency(type = "median", color = "red", linetype = "dashed") +
+  facet_wrap( ~ annotation_types, ncol = 1) 
+print(p)
+
+# By neoadjuvant
+p <- ggplot(data = filter(gp_data, !is.na(neoadjuvant))) + geom_density(mapping = aes(x = percent_gp, color = annotation_types)) + 
+    scale_color_manual(name = "annotation_types",values = myColors) +
+    theme_bw() + facet_wrap( ~ neoadjuvant, ncol = 1) 
+print(p)
+
+# By GP and neoadjuvant
+p <- ggdensity(data = filter(gp_data, !is.na(neoadjuvant)), x = "percent_gp", rug = TRUE) + 
+  scale_x_continuous(limits = c(0, 100)) +
+  stat_central_tendency(type = "median", color = "red", linetype = "dashed") +
+  facet_grid( neoadjuvant ~ annotation_types) 
+print(p)
+
+# Box plots all
+p <- ggplot(data = gp_data) + geom_boxplot(mapping = aes(x = reorder(annotation_types, percent_gp, FUN = median), y = percent_gp, fill = annotation_types)) +
+  scale_fill_manual(name = "annotation_types",values = myColors) + xlab("GPs") +
+  ggtitle("all") +
+  theme_bw()   
+print(p)
+
+# Neoajd vs chemonaive
+# Shapiro test for normality
+shap <- gp_data %>% shapiro_test(percent_gp)
+print(paste0("Shapiro test:", shap))
+
+# Comparisons between untreated and treated conditions for the tissue slices
+# Paired Wilcox-test is used because lack of normality
+# and Benjamini & Hochberg correction for multiple testing
+stat.test <- gp_data %>%
+  group_by(annotation_types) %>%
+  wilcox_test(
+    percent_gp ~ neoadjuvant, paired = FALSE) %>%
+    adjust_pvalue(method = "BH") %>%
+    add_significance("p.adj")
+print(stat.test)
+
+# Add statistical test p-values
+# Create the plot
+bxp <- ggboxplot(
+  gp_data, x = "annotation_types", y = "percent_gp",
+  color = "neoadjuvant", palette = "jco"
+  )
+# Add statistical test p-values
+stat.test1 <- stat.test %>% add_xy_position(x = "annotation_types")
+p <- bxp + stat_pvalue_manual(label = "p={round(p.adj,3)} {p.adj.signif}",
+  stat.test1, tip.length = 0) 
+print(p)
+
+# Effect sizes
+eff_size <- gp_data %>%
+  group_by(annotation_types) %>%
+  wilcox_effsize(
+    percent_gp ~ neoadjuvant, paired = FALSE)
+print(eff_size)
+}
 ```
 
 ### GPs by probe
 ```{r }
 gp_probe <- read.csv(gp_probe_fn, row.names=NULL)
-gp_probe$annotation_types <- factor(gp_probe$annotation_types, levels = c("P", "D","R2", "R") )
+gp_probe$ids <- as.factor(gp_probe$ids)
+
+if(!is_r1_2) {
+  # Merge r1 and 2
+  gp_probe$annotation_types <- gsub("R2", "R", gp_probe$annotation_types, fixed = TRUE)
+  gp_probe <- gp_probe %>% group_by(ids, annotation_types) %>% summarise(length_um = sum(length_um), percent_gp = sum(percent_gp))
+}
+gp_probe$annotation_types <- as.factor(gp_probe$annotation_types)
+gp_probe <- gp_probe %>% mutate(annotation_types = fct_relevel(annotation_types, annot_types)) %>% ungroup()
+
+# Obtain % desmo per probe and add as column for sorting in plot
+# Initialize % of desmoplastic for every tumor, so those with 0 % are captured when filtering
+tmp <- gp_probe
+for(an_id in unique(tmp$ids)) {
+  tmp <- tmp %>% add_row(ids = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
+}
+# Derive % desmo per probe
+desmo_probe <- tmp %>% group_by(ids) %>% filter(annotation_types == "D") %>% summarise(percent_gp = sum(percent_gp))
+gp_probe <- gp_probe %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[ desmo_probe$ids == ids, ]$percent_gp )
+
+# Merge neoadj data
+gp_probe <- merge(gp_probe, neoadj_data, by = "ids", all.x = TRUE)
+
+# Test % desmo per probe
+stopifnot(all_equal(gp_probe %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_probe %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_probe) %>% rename(percent_gp = percent_desmo_probe)))
+
+# Summary stats and density and box plots
+descr_gps(gp_probe)
+
+# Stacked bar plots, sorted by decreasing order of replacement.
+# Sorting is done by setting the order of ids factors according the order of ids after arranging the dataframe by percent_desmo
+# All
+sorted_gp_probe <- gp_probe %>% arrange(percent_desmo_probe) %>% mutate(ids = factor(ids, unique(ids)))
+ggplot(data = sorted_gp_probe) +
+    geom_col(mapping = aes(x = ids, y = percent_gp, fill = annotation_types)) +
+    scale_fill_manual(name = "annotation_types",values = myColors) + guides(fill=guide_legend(title="GPs")) + ggtitle("All") +
+    theme(panel.background = element_blank())
+
+# By neoadjuvant
+ggplot(data = filter(sorted_gp_probe, !is.na(neoadjuvant))) +
+     geom_col(mapping = aes(x = ids, y = percent_gp, fill = annotation_types)) +
+     scale_fill_manual(name = "annotation_types",values = myColors) + guides(fill=guide_legend(title="GPs")) +
+     theme(panel.background = element_blank()) + facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x")
 ```
 
-```{r}
-ggplot(data = gp_probe, aes(x = ids, y = percent_gp, fill = annotation_types))+ geom_bar(stat="identity") + scale_fill_manual(name = "annotation_types",values = myColors) +
-    guides(fill=guide_legend(title="GPs"))
+### GPs by tumor
+```{r }
+gp_tumor <- read.csv(gp_tumor_fn, row.names=NULL)
+gp_tumor <- gp_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% relocate(tumor_name)
+gp_tumor$tumor_name <- as.factor(gp_tumor$tumor_name)
+
+if(!is_r1_2) {
+  # Merge r1 and 2
+  gp_tumor$annotation_types <- gsub("R2", "R", gp_tumor$annotation_types, fixed = TRUE)
+  gp_tumor <- gp_tumor %>% group_by(ids, tumor_name, annotation_types) %>% summarise(length_um = sum(length_um), percent_gp = sum(percent_gp))
+}
+gp_tumor$annotation_types <- as.factor(gp_tumor$annotation_types)
+gp_tumor <- gp_tumor %>% mutate(annotation_types = fct_relevel(annotation_types, annot_types)) %>% ungroup()
+
+# Obtain % desmo per probe and add as column for sorting in plot
+# Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
+tmp <- gp_tumor
+for(an_id in unique(tmp$tumor_name)) {
+  tmp <- tmp %>% add_row(tumor_name = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
+}
+# Derive % desmo per tumor
+desmo_tumor <- tmp %>% group_by(tumor_name) %>% filter(annotation_types == "D") %>% summarise(percent_gp = sum(percent_gp))
+gp_tumor <- gp_tumor %>% rowwise() %>% mutate(percent_desmo_tumor = desmo_tumor[ desmo_tumor$tumor_name == tumor_name, ]$percent_gp )
+gp_tumor <- gp_tumor %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[ desmo_probe$ids == ids, ]$percent_gp )
+
+# Test % desmo per tumor
+stopifnot(all_equal(gp_tumor %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_tumor %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_tumor) %>% rename(percent_gp = percent_desmo_tumor)))
+
+# Merge neoadj data
+gp_tumor <- merge(gp_tumor, neoadj_data, by = "ids", all.x = TRUE)
+
+# Summary stats and density and box plots
+descr_gps(gp_tumor)
+
+# Plot with tumor_name sorted by percent_desmo_probe and percent_desmo_tumor (see approach above in by probe)
+# All
+sorted_gp_tumor <- gp_tumor %>% arrange(percent_desmo_probe, percent_desmo_tumor) %>% mutate(tumor_name = factor(tumor_name, unique(tumor_name)))
+ggplot(data = sorted_gp_tumor) + geom_col(mapping = aes(x = tumor_name, y = percent_gp, fill = annotation_types)) + # , width = 0.1
+    scale_fill_manual(name = "annotation_types", values = myColors) + guides(fill=guide_legend(title="GPs"))  + ggtitle("All") + theme(panel.background = element_blank())
+
+# By neoadjuvant
+ggplot(data = filter(sorted_gp_tumor, !is.na(neoadjuvant))) + geom_col(mapping = aes(x = tumor_name, y = percent_gp, fill = annotation_types)) + # , width = 0.1
+    scale_fill_manual(name = "annotation_types", values = myColors) + guides(fill=guide_legend(title="GPs"))  + ggtitle("All") +
+    theme(panel.background = element_blank()) + facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x")
+
+# Outlayer id:95, with a large desmo invasion front tumor 'a' and a small replacement tumor 'b', TODO check WSIs
+
+# Old detailed plots
+if(is_detailed) {
+  plots <- gp_tumor %>% group_by(ids) %>% do( plots =
+    ggplot(data = ., aes(x = tumor_name, y = percent_gp, fill = annotation_types))+ geom_bar(stat="identity") + scale_fill_manual(name = "annotation_types",values = myColors) +
+      ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="GPs")) 
+  )
+  
+  for(p in plots$plots) {print(p)}
+}
+```
+
+### GPs by slide
+```{r }
+gp_slide <- read.csv(gp_slide_fn, row.names=NULL)
+gp_slide <- gp_slide %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% relocate(tumor_name)
+gp_slide <- gp_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name)
+gp_slide$slide_name <- as.factor(gp_slide$slide_name)
+
+if(!is_r1_2) {
+  # Merge r1 and 2
+  gp_slide$annotation_types <- gsub("R2", "R", gp_slide$annotation_types, fixed = TRUE)
+  gp_slide <- gp_slide %>% group_by(ids, tumor_name, slide_name, annotation_types) %>% summarise(length_um = sum(length_um), percent_gp = sum(percent_gp))
+}
+gp_slide$annotation_types <- as.factor(gp_slide$annotation_types)
+gp_slide <- gp_slide %>% mutate(annotation_types = fct_relevel(annotation_types, annot_types)) %>% ungroup()
+
+# Obtain % desmo per probe and add as column for sorting in plot
+# Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
+tmp <- gp_slide
+for(an_id in unique(tmp$slide_name)) {
+  tmp <- tmp %>% add_row(slide_name = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
+}
+# Derive % desmo per slide
+desmo_slide <- tmp %>% group_by(slide_name) %>% filter(annotation_types == "D") %>% summarise(percent_gp = sum(percent_gp))
+gp_slide <- gp_slide %>% rowwise() %>% mutate(percent_desmo_slide = desmo_slide[ desmo_slide$slide_name == slide_name, ]$percent_gp )
+gp_slide <- gp_slide %>% rowwise() %>% mutate(percent_desmo_tumor = desmo_tumor[ desmo_tumor$tumor_name == tumor_name, ]$percent_gp )
+gp_slide <- gp_slide %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[ desmo_probe$ids == ids, ]$percent_gp )
+
+# Test % desmo per slide
+stopifnot(all_equal(gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_slide) %>% rename(percent_gp = percent_desmo_slide)))
+
+# Merge neoadj data
+gp_slide <- merge(gp_slide, neoadj_data, by = "ids", all.x = TRUE)
+
+# Summary stats and density and box plots
+descr_gps(gp_slide)
+
+# Plot with tumor_name sorted by percent_desmo_probe and percent_desmo_tumor, see approache above in by probe
+# All
+sorted_gp_slide <- gp_slide %>% arrange(percent_desmo_probe, percent_desmo_tumor, percent_desmo_slide) %>% mutate(slide_name = factor(slide_name, unique(slide_name)))
+ggplot(data = sorted_gp_slide) +  geom_col(mapping = aes(x = slide_name, y = percent_gp, fill = annotation_types)) + # , width = 0.1
+  scale_fill_manual(name = "annotation_types", values = myColors) + guides(fill=guide_legend(title="GPs")) + ggtitle("All") + theme(panel.background = element_blank())
+
+# By neoadjuvamt
+ggplot(data = filter(sorted_gp_slide, !is.na(neoadjuvant)) ) + geom_col(mapping = aes(x = slide_name, y = percent_gp, fill = annotation_types)) + # , width = 0.1
+  scale_fill_manual(name = "annotation_types", values = myColors) + guides(fill=guide_legend(title="GPs")) + ggtitle("All") +
+    theme(panel.background = element_blank()) + facet_wrap( ~ neoadjuvant, ncol = 1, scales="free_x")
+
+# Old detailed plots
+if(is_detailed) {
+  plots <- gp_slide %>% group_by(ids) %>% do( plots =
+    ggplot(data = ., aes(x = slide_name, y = percent_gp, fill = annotation_types))+ geom_bar(stat="identity") + scale_fill_manual(name = "annotation_types",values = myColors) +
+      ggtitle(paste("Probe:", .$ids)) + theme(plot.title = element_text(hjust = 0.5)) + guides(fill=guide_legend(title="GPs")) + facet_wrap(~ tumors, scales = "free_x")
+  )
+  
+  for(p in plots$plots) {print(p)}
+}
 ```
