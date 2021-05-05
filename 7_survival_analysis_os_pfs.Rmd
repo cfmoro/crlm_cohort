@@ -1,0 +1,254 @@
+---
+title: "7_survival_analysis_os_pfs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Generated on: `r Sys.time()`
+
+Import required packages
+```{r}
+library(tidyverse)
+library(survival)
+library(survminer)
+library(corrplot)
+```
+
+```{r}
+workDir <- "/home/bibu/Workspace/crlm_cohort/"
+
+clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+```
+
+Import data
+```{r}
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+```
+
+Parametrized survival function (to avoid code repetition)
+```{r}
+plotSurv <- function(grouping, fun_data, surv_type, do_facet, cohort_type = "All") {
+  
+params <- list(grouping = substitute(grouping), fun_data = substitute(fun_data))
+
+if(surv_type == "OS") {
+  expr <- substitute(survfit(Surv(time = time_fu_os, event = status_fu_os,) ~ grouping, data = fun_data), params)
+} else if(surv_type == "PFS") {
+  expr <- substitute(survfit(Surv(time = time_fu_prog, event = status_fu_prog,) ~ grouping, data = fun_data), params)
+}
+fit_object <- eval.parent(expr)
+print(fit_object)
+
+# All  
+p <- ggsurvplot(fit_object, data = fun_data, 
+    title = paste(surv_type, "- ", cohort_type),
+    xlab = "Days", 
+    ylab = "Survival probability",
+    pval = TRUE)  
+print(p)
+
+# Neoadjuvant vs Chemonaïve
+if(do_facet) {
+  p <- ggsurvplot_facet(fit_object, data = fun_data, 
+      title = surv_type,
+      xlab = "Days", 
+      ylab = "Survival probability",
+      pval = TRUE, 
+      facet.by = "neoadjuvant")  
+  print(p)
+ }
+}
+```
+
+Survival plots
+```{r}
+# Global OS All
+plotSurv(1, clinPatAnnotData, "OS", FALSE)
+# Global OS Neoadjuvant
+plotSurv(1, filter(clinPatAnnotData, neoadjuvant == "Y"), "OS", FALSE, "Neoadjuvant")
+# Global OS Chemonaïve
+plotSurv(1, filter(clinPatAnnotData, neoadjuvant == "N"), "OS", FALSE, "Chemonaïve")
+# ------------------------
+# Global PFS All
+plotSurv(1, clinPatAnnotData, "PFS", FALSE)
+# Global OS Neoadjuvant
+plotSurv(1, filter(clinPatAnnotData, neoadjuvant == "Y"), "PFS", FALSE, "Neoadjuvant")
+# Global OS Chemonaïve
+plotSurv(1, filter(clinPatAnnotData, neoadjuvant == "N"), "PFS", FALSE, "Chemonaïve")
+
+# Age
+plotSurv(age_, clinPatAnnotData, "OS", TRUE)
+plotSurv(age_, clinPatAnnotData, "PFS", TRUE)
+
+# Sex
+plotSurv(sex, clinPatAnnotData, "OS", TRUE)
+plotSurv(sex, clinPatAnnotData, "PFS", TRUE)
+
+# Primary side
+plotSurv(primary_side, filter(clinPatAnnotData, primary_side != "U"), "OS", TRUE)
+plotSurv(primary_side, filter(clinPatAnnotData, primary_side != "U"), "PFS", TRUE)
+
+# Sync/meta
+plotSurv(sync_meta, clinPatAnnotData, "OS", TRUE)
+plotSurv(sync_meta, clinPatAnnotData, "PFS", TRUE)
+
+# Neoadjuvant
+plotSurv(neoadjuvant, clinPatAnnotData, "OS", FALSE)
+plotSurv(neoadjuvant, clinPatAnnotData, "PFS", FALSE)
+
+# Num tumors
+plotSurv(num_tumors_, clinPatAnnotData, "OS", TRUE)
+plotSurv(num_tumors_, clinPatAnnotData, "PFS", TRUE)
+
+# Largest tumor diameter
+plotSurv(max_tum_diameter, clinPatAnnotData, "OS", TRUE)
+plotSurv(max_tum_diameter, clinPatAnnotData, "PFS", TRUE)
+
+# Sum of tumor diameters
+plotSurv(sum_tum_diameter, clinPatAnnotData, "OS", TRUE)
+plotSurv(sum_tum_diameter, clinPatAnnotData, "PFS", TRUE)
+
+# Marginal0
+plotSurv(marginal0, clinPatAnnotData, "OS", TRUE)
+plotSurv(marginal0, clinPatAnnotData, "PFS", TRUE)
+
+# Marginal1
+plotSurv(marginal1, clinPatAnnotData, "OS", TRUE)
+plotSurv(marginal1, clinPatAnnotData, "PFS", TRUE)
+
+# Marginal1
+plotSurv(marginal01, clinPatAnnotData, "OS", TRUE)
+plotSurv(marginal01, clinPatAnnotData, "PFS", TRUE)
+
+# Tumor percent report
+plotSurv(tum_percent_report, clinPatAnnotData, "OS", TRUE)
+plotSurv(tum_percent_report, clinPatAnnotData, "PFS", TRUE)
+
+# Tumor percent annotation
+plotSurv(tum_percent_annot_, clinPatAnnotData, "OS", TRUE)
+plotSurv(tum_percent_annot_, clinPatAnnotData, "PFS", TRUE)
+
+# Predominant GP (D, R, P)
+plotSurv(gp_predo3, clinPatAnnotData, "OS", TRUE)
+plotSurv(gp_predo3, clinPatAnnotData, "PFS", TRUE)
+
+# Predominant GP (D, R1, R2, P)
+plotSurv(gp_predo4, clinPatAnnotData, "OS", TRUE)
+plotSurv(gp_predo4, clinPatAnnotData, "PFS", TRUE)
+
+# Predominant GP (D, R) OS All
+plotSurv(gp_predo3, filter(clinPatAnnotData, gp_predo3 != 'P'), "OS", TRUE)
+plotSurv(gp_predo3, filter(clinPatAnnotData, gp_predo3 != 'P'), "PFS", TRUE)
+
+# Percent replacement
+plotSurv(replacement, clinPatAnnotData, "OS", TRUE)
+plotSurv(replacement, clinPatAnnotData, "PFS", TRUE)
+
+# Desmo95 replacement
+plotSurv(desmo95, clinPatAnnotData, "OS", TRUE)
+plotSurv(desmo95, clinPatAnnotData, "PFS", TRUE)
+
+# Desmo10050 replacement
+plotSurv(desmo10050, clinPatAnnotData, "OS", TRUE)
+plotSurv(desmo10050, clinPatAnnotData, "PFS", TRUE)
+
+```
+
+Experimental parameters
+```{r}
+# Summed tumor score report, calculated as the sum of % tumor cells x diameter
+plotSurv(tum_score_report, clinPatAnnotData, "OS", TRUE)
+plotSurv(tum_score_report, clinPatAnnotData, "PFS", TRUE)
+
+# Summed tumor score annotation, calculated as the sum of % tumor cells x diameter
+plotSurv(tum_score_annot_, clinPatAnnotData, "OS", TRUE)
+plotSurv(tum_score_annot_, clinPatAnnotData, "PFS", TRUE)
+
+# Summed replacement score, calculated as the sum of % replacement x diameter
+plotSurv(replacement_score, clinPatAnnotData, "OS", TRUE)
+plotSurv(replacement_score, clinPatAnnotData, "PFS", TRUE)
+
+# % Replacement 2 vs 1 (for cases with replacement)
+plotSurv(r2_group, clinPatAnnotData, "OS", TRUE)
+plotSurv(r2_group, clinPatAnnotData, "PFS", TRUE)
+```
+
+Multivariate analysis (CCox proportional hazards model)
+```{r, fig.width= 10}
+# Fit a Cox proportional hazards model
+# Alternatively, build model with continuous data instead of discretized
+
+# OS All
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+                    tum_percent_annot  + desmo_percent, data = clinPatAnnotData)
+summary(fit.coxph)
+# Obs, seems there is a bug when coefs are Inf plot is not drawn
+ggforest(fit.coxph, data = clinPatAnnotData)
+
+# OS Neoadjuvant
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+
+# OS Chemonaïve
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+# ------------------------
+# PFS All
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+                    tum_percent_annot  + desmo_percent, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData)
+
+# PFS Neoadjuvant
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+
+# PFS Chemonaïve
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+```
+
+Correlation matrix
+```{r, fig.width= 10}
+corrData <- clinPatAnnotData %>% select(where(is.numeric)) %>% select(-id)
+
+corr_matrix <-cor(corrData, use = "na.or.complete")
+head(round(corr_matrix,2))
+
+corrplot(corr_matrix, type="upper", order="hclust")
+
+# mat : is a matrix of data
+# ... : further arguments to pass to the native R cor.test function
+cor.mtest <- function(mat, ...) {
+    mat <- as.matrix(mat)
+    n <- ncol(mat)
+    p.mat<- matrix(NA, n, n)
+    diag(p.mat) <- 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp <- cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+# matrix of the p-value of the correlation
+p.mat <- cor.mtest(corrData)
+head(p.mat[, 1:5])
+
+# Leave blank on no significant coefficient
+corrplot(corr_matrix, type="upper", order="hclust", 
+         p.mat = p.mat, sig.level = 0.01, insig = "blank")
+```

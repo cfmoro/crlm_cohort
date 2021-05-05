@@ -1,0 +1,257 @@
+---
+title: "8_survival_analysis_with_opt_cutoffs"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Generated on: `r Sys.time()`
+
+Import required packages
+```{r}
+library(tidyverse)
+library(survival)
+library(survminer)
+library(corrplot)
+```
+
+```{r}
+workDir <- "/home/bibu/Workspace/crlm_cohort/"
+
+clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+```
+
+Import data
+```{r}
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+
+# Remove previously discretized fields
+clinPatAnnotData <- clinPatAnnotData %>% select(-age_, -num_tumors_, -max_tum_diameter, -sum_tum_diameter, -marginal0, -marginal1, -marginal01, -tum_percent_report, -tum_score_report, -tum_percent_annot_, -tum_score_annot_, -replacement, -replacement_score, -desmo95, -desmo10050, -r2_group)
+```
+
+Parametrized survival function (to avoid code repetition)
+```{r}
+plotSurv <- function(grouping, fun_data, cutoff, surv_type, do_facet, cohort_type = "All") {
+  
+  params <- list(grouping = substitute(grouping), fun_data = substitute(fun_data))
+  
+  if(surv_type == "OS") {
+    expr <- substitute(survfit(Surv(time = time_fu_os, event = status_fu_os,) ~ grouping, data = fun_data), params)
+  } else if(surv_type == "PFS") {
+    expr <- substitute(survfit(Surv(time = time_fu_prog, event = status_fu_prog,) ~ grouping, data = fun_data), params)
+  }
+  fit_object <- eval.parent(expr)
+  print(fit_object)
+  
+  # All
+  p <- ggsurvplot(fit_object, data = fun_data,
+      title = paste(surv_type, "- ", cohort_type),
+      legend.title = ifelse(cutoff != "", paste("Cut-off:", cutoff), "Strata"),
+      xlab = "Days", 
+      ylab = "Survival probability",
+      pval = TRUE)  
+  print(p)
+
+# Neoadjuvant vs Chemonaïve
+if(do_facet) {
+  p <- ggsurvplot_facet(fit_object, data = fun_data, 
+      title = surv_type,
+      legend.title = ifelse(cutoff != "", paste("Cut-off:", cutoff), "Strata"),
+      xlab = "Days", 
+      ylab = "Survival probability",
+      pval = TRUE, 
+      facet.by = "neoadjuvant")  
+  print(p)
+ }
+}
+```
+
+Optimal cut-offs
+```{r}
+# https://www.datacamp.com/community/tutorials/survival-analysis-R
+# https://rviews.rstudio.com/2017/09/25/survival-analysis-with-r/
+# https://www.emilyzabor.com/tutorials/survival_analysis_in_r_tutorial.html
+
+# Fit survival data using the Kaplan-Meier method
+#survObjectOS <- Surv(time = clinPatAnnotData$time_fu_os, event = clinPatAnnotData$status_fu_os) # OS
+
+# OS
+dataCutOS <- surv_cutpoint(clinPatAnnotData, time = "time_fu_os", event = "status_fu_os", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)  
+dataCatOS <- surv_categorize(dataCutOS)
+
+# Join original non-categorized and newly categorized data. OBS, assumes same order of rows!!
+clinDataCatOS <- cbind(select(clinPatAnnotData, sex, primary_side, sync_meta, neoadjuvant, gp_predo3, gp_predo4), dataCatOS)
+
+# Check that the joint dataset has the same order of rows than the two original ones
+stopifnot(identical(clinDataCatOS$time_fu_os, dataCatOS$time_fu_os))
+stopifnot(identical(clinDataCatOS$status_fu_os, dataCatOS$status_fu_os))
+stopifnot(identical(clinDataCatOS$age, dataCatOS$age))
+
+stopifnot(identical(clinDataCatOS$time_fu_os, clinPatAnnotData$time_fu_os))
+stopifnot(identical(clinDataCatOS$status_fu_os, clinPatAnnotData$status_fu_os))
+stopifnot(identical(clinDataCatOS$sex, clinPatAnnotData$sex))
+stopifnot(identical(clinDataCatOS$neoadjuvant, clinPatAnnotData$neoadjuvant))
+
+# PFS
+dataCutPFS <- surv_cutpoint(clinPatAnnotData, time = "time_fu_prog", event = "status_fu_prog", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)  
+dataCatPFS <- surv_categorize(dataCutPFS)
+
+# Join original non-categorized and newly categorized data. OBS, assumes same order of rows!!
+clinDataCatPFS <- cbind(select(clinPatAnnotData, sex, primary_side, sync_meta, neoadjuvant, gp_predo3, gp_predo4), dataCatPFS)
+
+# Check that the joint dataset has the same order of rows than the two original ones
+stopifnot(identical(clinDataCatPFS$time_fu_prog, dataCatPFS$time_fu_prog))
+stopifnot(identical(clinDataCatPFS$status_fu_prog, dataCatPFS$status_fu_prog))
+stopifnot(identical(clinDataCatPFS$age, dataCatPFS$age))
+
+stopifnot(identical(clinDataCatPFS$time_fu_prog, clinPatAnnotData$time_fu_prog))
+stopifnot(identical(clinDataCatPFS$status_fu_prog, clinPatAnnotData$status_fu_prog))
+stopifnot(identical(clinDataCatPFS$sex, clinPatAnnotData$sex))
+stopifnot(identical(clinDataCatPFS$neoadjuvant, clinPatAnnotData$neoadjuvant))
+```
+
+Survival plots
+```{r}
+# Global OS All
+plotSurv(1, clinDataCatOS, "", "OS", FALSE)
+# Global OS Neoadjuvant
+plotSurv(1, filter(clinDataCatOS, neoadjuvant == "Y"), "", "OS", FALSE, "Neoadjuvant")
+# Global OS Chemonaïve
+plotSurv(1, filter(clinDataCatOS, neoadjuvant == "N"), "", "OS", FALSE, "Chemonaïve")
+# ------------------------
+# Global PFS All
+plotSurv(1, clinDataCatPFS, "", "PFS", FALSE)
+# Global OS Neoadjuvant
+plotSurv(1, filter(clinDataCatPFS, neoadjuvant == "Y"), "", "PFS", FALSE, "Neoadjuvant")
+# Global OS Chemonaïve
+plotSurv(1, filter(clinDataCatPFS, neoadjuvant == "N"), "", "PFS", FALSE, "Chemonaïve")
+
+# Age
+plotSurv(age, clinDataCatOS, unname(dataCutOS$age$estimate), "OS", TRUE)
+plotSurv(age, clinDataCatPFS, unname(dataCutPFS$age$estimate), "PFS", TRUE)
+
+# Sex
+plotSurv(sex, clinDataCatOS, "", "OS", TRUE)
+plotSurv(sex, clinDataCatPFS, "", "PFS", TRUE)
+
+# Primary side
+plotSurv(primary_side, filter(clinDataCatOS, primary_side != "U"), "", "OS", TRUE)
+plotSurv(primary_side, filter(clinDataCatPFS, primary_side != "U"), "", "PFS", TRUE)
+
+# Sync/meta
+plotSurv(sync_meta, clinDataCatOS, "", "OS", TRUE)
+plotSurv(sync_meta, clinDataCatPFS, "", "PFS", TRUE)
+
+# Neoadjuvant
+plotSurv(neoadjuvant, clinDataCatOS, "", "OS", FALSE)
+plotSurv(neoadjuvant, clinDataCatPFS, "", "PFS", FALSE)
+
+# Num tumors
+plotSurv(num_tumors, clinDataCatOS, unname(dataCutOS$num_tumors$estimate), "OS", TRUE)
+plotSurv(num_tumors, clinDataCatPFS, unname(dataCutPFS$num_tumors$estimate), "PFS", TRUE)
+
+# Largest tumor diameter
+plotSurv(max_diameter, clinDataCatOS, unname(dataCutOS$max_diameter$estimate), "OS", TRUE)
+plotSurv(max_diameter, clinDataCatPFS, unname(dataCutPFS$max_diameter$estimate), "PFS", TRUE)
+
+# Sum of tumor diameters
+plotSurv(sum_diameter, clinDataCatOS, unname(dataCutOS$sum_diameter$estimate), "OS", TRUE)
+plotSurv(sum_diameter, clinDataCatPFS, unname(dataCutPFS$sum_diameter$estimate), "PFS", TRUE)
+
+# Marginal
+plotSurv(marginal, clinDataCatOS, unname(dataCutOS$marginal$estimate), "OS", TRUE)
+plotSurv(marginal, clinDataCatPFS, unname(dataCutPFS$marginal$estimate), "PFS", TRUE)
+
+# Tumor percent report
+plotSurv(mean_tumor_percent_report, clinDataCatOS, unname(dataCutOS$mean_tumor_percent_report$estimate), "OS", TRUE)
+plotSurv(mean_tumor_percent_report, clinDataCatPFS, unname(dataCutPFS$mean_tumor_percent_report$estimate), "PFS", TRUE)
+
+# Tumor percent annotation
+plotSurv(tum_percent_annot, clinDataCatOS, unname(dataCutOS$tum_percent_annot$estimate), "OS", TRUE)
+plotSurv(tum_percent_annot, clinDataCatPFS, unname(dataCutPFS$tum_percent_annot$estimate), "PFS", TRUE)
+
+# Predominant GP (D, R, P)
+plotSurv(gp_predo3, clinDataCatOS, "", "OS", TRUE)
+plotSurv(gp_predo3, clinDataCatPFS, "", "PFS", TRUE)
+
+# Predominant GP (D, R1, R2, P)
+plotSurv(gp_predo4, clinDataCatOS, "", "OS", TRUE)
+plotSurv(gp_predo4, clinDataCatPFS, "", "PFS", TRUE)
+
+# Predominant GP (D, R)
+plotSurv(gp_predo3, filter(clinDataCatOS, gp_predo3 != 'P'), "", "OS", TRUE)
+plotSurv(gp_predo3, filter(clinDataCatPFS, gp_predo3 != 'P'), "", "PFS", TRUE)
+
+# Percent replacement
+plotSurv(replacement_percent, clinDataCatOS, unname(dataCutOS$replacement_percent$estimate), "OS", TRUE)
+plotSurv(replacement_percent, clinDataCatPFS, unname(dataCutPFS$replacement_percent$estimate), "PFS", TRUE)
+
+# Percent desmo
+plotSurv(desmo_percent, clinDataCatOS, unname(dataCutOS$desmo_percent$estimate), "OS", TRUE)
+plotSurv(desmo_percent, clinDataCatPFS, unname(dataCutPFS$desmo_percent$estimate), "PFS", TRUE)
+```
+
+Experimental parameters
+```{r}
+# Summed tumor score report, calculated as the sum of % tumor cells x diameter
+plotSurv(sum_tumour_score_report, clinDataCatOS, unname(dataCutOS$sum_tumour_score_report$estimate), "OS", TRUE)
+plotSurv(sum_tumour_score_report, clinDataCatPFS, unname(dataCutPFS$sum_tumour_score_report$estimate), "PFS", TRUE)
+
+# Summed tumor score annotation, calculated as the sum of % tumor cells x diameter
+plotSurv(sum_tumour_score_annot, clinDataCatOS, unname(dataCutOS$sum_tumour_score_annot$estimate), "OS", TRUE)
+plotSurv(sum_tumour_score_annot, clinDataCatPFS, unname(dataCutPFS$sum_tumour_score_annot$estimate), "PFS", TRUE)
+
+# Summed replacement score, calculated as the sum of % replacement x diameter
+plotSurv(sum_replacement_score_annot, clinDataCatOS, unname(dataCutOS$sum_replacement_score_annot$estimate), "OS", TRUE)
+plotSurv(sum_replacement_score_annot, clinDataCatPFS, unname(dataCutPFS$sum_replacement_score_annot$estimate), "PFS", TRUE)
+
+# % Replacement 2 vs 1 (for cases with replacement)
+plotSurv(percent_r2, clinDataCatOS, unname(dataCutOS$percent_r2$estimate), "OS", TRUE)
+plotSurv(percent_r2, clinDataCatPFS, unname(dataCutPFS$percent_r2$estimate), "PFS", TRUE)
+```
+
+Multivariate analysis (CCox proportional hazards model)
+```{r, fig.width= 10}
+# Fit a Cox proportional hazards model
+# Alternatively, build model with continuous data instead of discretized
+
+# OS All
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot  + desmo_percent, data = clinDataCatOS)
+summary(fit.coxph)
+# Obs, seems there is a bug when coefs are Inf plot is not drawn
+ggforest(fit.coxph, data = clinDataCatOS)
+
+# OS Neoadjuvant
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot + desmo_percent, data = filter(clinDataCatOS, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinDataCatOS, neoadjuvant == "Y"))
+
+# OS Chemonaïve
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot + desmo_percent, data = filter(clinDataCatOS, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinDataCatOS, neoadjuvant == "N"))
+# ------------------------
+# PFS All
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot  + desmo_percent, data = clinDataCatPFS)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinDataCatPFS)
+
+# PFS Neoadjuvant
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot + desmo_percent, data = filter(clinDataCatPFS, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinDataCatPFS, neoadjuvant == "Y"))
+
+# PFS Chemonaïve
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+                    + tum_percent_annot + desmo_percent, data = filter(clinDataCatPFS, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinDataCatPFS, neoadjuvant == "N"))
+```
+
