@@ -1,7 +1,11 @@
+library(tidyverse)
+
 # Globals
-base_dir <-"/home/bibu/Workspace/crlm_cohort/output"
-parsed_csv_dir <- paste(base_dir, "/parsed_annotations", sep="")
-combined_fn <- paste(base_dir, "/combined_annotations.csv", sep="")
+base_dir <-"/home/bibu/Workspace/crlm_cohort"
+parsed_csv_dir <- paste(base_dir, "/output/parsed_annotations", sep="")
+combined_fn <- paste(base_dir, "/output/combined_annotations.csv", sep="")
+test_data_fn <- paste(base_dir, "/annotations/Annotation_tests_CRLM_cohort.csv", sep="")
+is_test = TRUE # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Remove previous combined file
 if (file.exists(combined_fn)) {
@@ -20,3 +24,25 @@ for (fn in file_list){
 }
 # Write combined dataframe as csv
 write.csv(df, combined_fn, row.names=FALSE)
+
+# Test
+if(is_test) {
+  
+  annot_levels <- c("D", "R", "R2", "P", "%")
+  
+  print("Testing parsed GP and regression annotation data")
+  combined_data <- read.csv(combined_fn)
+  combined_data <- combined_data %>% unite(slide, ids, tumors, blocks, sep = "-") %>% rename(label = annotation_types, value = lengths_um) %>% mutate(label = recode(label, 'Tumor' = '%'))
+  combined_data <- combined_data %>% mutate(value = ifelse( label == '%', percents, value)) %>% select(-percents)
+  combined_data$slide <- as.factor(combined_data$slide)
+  combined_data$label <- fct_relevel(combined_data$label, annot_levels)
+
+  test_data <- read.csv(test_data_fn) 
+  test_data <- test_data %>% select(slide:value)
+  test_data$label <- fct_relevel(test_data$label, annot_levels)
+  # Change a value in a dataset to provoke for test failure
+  # test_data[1, 3] <- test_data[1, 3] + as.integer(1000)
+  print(all_equal(combined_data, test_data))
+  stopifnot(all_equal(combined_data, test_data))
+  print("Test PASSED, parsed dataset is identical till test dataset")
+}
