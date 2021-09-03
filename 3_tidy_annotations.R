@@ -13,7 +13,7 @@ regression_tumor_fn <- paste(base_dir, "/output/regression_by_tumor.csv", sep=""
 regression_probe_fn <- paste(base_dir, "/output/regression_by_probe.csv", sep="")
 
 test_data_fn <- paste(base_dir, "/annotations/Annotation_tests_CRLM_cohort.csv", sep="")
-is_test = TRUE #FALSE   # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
+is_test = FALSE #TRUE   # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Read all annotations
 df <- read.csv(combined_fn, row.names=NULL)
@@ -55,6 +55,8 @@ write.csv(regression_tumor, regression_tumor_fn, row.names=FALSE)
 
 # Tumor regression by probe - summarizing the regression in every slide (not by tumors, to diminish bias by tumor size)
 regression_probe <- regression_slide %>% group_by(ids) %>% summarise(avg_percent = round(mean(percents), 2))
+# Tumor regression by probe - summarizing the regression by tumors, as with regression by report
+#regression_probe <- regression_tumor %>% group_by(ids) %>% summarise(avg_percent = round(mean(avg_percent), 2))
 
 write.csv(regression_probe, regression_probe_fn, row.names=FALSE)
 

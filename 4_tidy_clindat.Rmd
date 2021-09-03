@@ -68,12 +68,11 @@ clinData <- rename(clinData, id = "PaRaMet pseudonym", date_birth = dob, primary
                    date_lost_follow_up = "lost for follow up")
 (nms <- names(clinData))
 
-# Filter Evelina or Danyil cohort
-#clinData <- clinData %>% filter(id < 60) # Evelina
 # Remove wrong rows
 clinData <- clinData %>% filter(!id %in% c(11, NA))
 
-clinData <- clinData # %>% filter(id >= 59) # Evelina < 59, Lorand-Danyil >= 59
+# Filter for individual cohorts
+clinData <- clinData  # %>% filter(id < 59) # Evelina < 59, Lorand-Danyil >= 59
 # Remove wrong rows
 #clinData <- clinData %>% filter(!id %in% c(61, 70)) # TODO find personnummer id 70
 
@@ -336,6 +335,8 @@ hist(gpProbeDesmo$desmo_percent)
 gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group95 = ifelse(desmo_percent >=95, "95+", "<95"))
 gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group10050 = ifelse(desmo_percent == 100, "100",
                                                                 ifelse(desmo_percent >= 50 & desmo_percent < 100, "50-100", "0-50")))
+# TODO: refactor discretization code from ifelse to cut
+gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_galjart = cut(gpProbeDesmo$desmo_percent, breaks = c(0, 33, 66, 99.9, 100), include.lowest = TRUE))
 
 # Dichotomize % replacement2
 table(gpRepl2PercentR2Trim$percent_r2)
@@ -355,6 +356,7 @@ table(tumorPercentProbe$tum_percent_annot)
 hist(tumorPercentProbe$tum_percent_annot)
 tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_group = ifelse(tum_percent_annot == 0, "0",
                                                                 ifelse(tum_percent_annot > 0 & tum_percent_annot < 50, "1-50", "50+")))
+tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_5 = ifelse(tum_percent_annot <= 5, "5", "5+"))
 ```
 
 Merge annotation derived regression and GP data with clinPath data

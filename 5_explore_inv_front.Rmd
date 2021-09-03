@@ -99,6 +99,8 @@ p <- ggplot(data = gp_data) + geom_boxplot(mapping = aes(x = reorder(annotation_
   theme_bw()   
 print(p)
 
+# for Danyil data, otherwise error, not enough data for wilcox return(1)
+
 # Neoajd vs chemonaive
 # Shapiro test for normality
 shap <- gp_data %>% shapiro_test(percent_gp)
@@ -190,6 +192,9 @@ gp_tumor <- read.csv(gp_tumor_fn, row.names=NULL)
 gp_tumor <- gp_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% relocate(tumor_name)
 gp_tumor$tumor_name <- as.factor(gp_tumor$tumor_name)
 
+# Total number of tumors
+length(unique(gp_tumor$tumor_name))
+
 if(!is_r1_2) {
   # Merge r1 and 2
   gp_tumor$annotation_types <- gsub("R2", "R", gp_tumor$annotation_types, fixed = TRUE)
@@ -198,8 +203,9 @@ if(!is_r1_2) {
 gp_tumor$annotation_types <- as.factor(gp_tumor$annotation_types)
 gp_tumor <- gp_tumor %>% mutate(annotation_types = fct_relevel(annotation_types, annot_types)) %>% ungroup()
 
-# Obtain % desmo per probe and add as column for sorting in plot
+# Obtain % desmo per probe and add as column for sorting in plot 
 # Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
+# TODO add replacement?
 tmp <- gp_tumor
 for(an_id in unique(tmp$tumor_name)) {
   tmp <- tmp %>% add_row(tumor_name = an_id, annotation_types = "D", length_um = 0, percent_gp = 0)
@@ -248,6 +254,9 @@ gp_slide <- read.csv(gp_slide_fn, row.names=NULL)
 gp_slide <- gp_slide %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% relocate(tumor_name)
 gp_slide <- gp_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name)
 gp_slide$slide_name <- as.factor(gp_slide$slide_name)
+
+# Total number of tumors
+length(unique(gp_slide$slide_name))
 
 if(!is_r1_2) {
   # Merge r1 and 2

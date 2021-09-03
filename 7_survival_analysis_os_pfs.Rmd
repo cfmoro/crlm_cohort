@@ -15,6 +15,7 @@ library(tidyverse)
 library(survival)
 library(survminer)
 library(corrplot)
+library(prodlim)
 ```
 
 ```{r}
@@ -26,6 +27,7 @@ clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
 Import data
 ```{r}
 clinPatAnnotData <- read.csv(clinPatAnnotFn)
+clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "[0,33]", "(33,66]","(66,99.9]",  "(99.9,100]" )
 ```
 
 Parametrized survival function (to avoid code repetition)
@@ -61,6 +63,13 @@ if(do_facet) {
   print(p)
  }
 }
+```
+
+Estimation of the median follow-up time (reverse Kaplan-Meier)
+```{r}
+# https://publicifsv.sund.ku.dk/~tag/Teaching/share/R-tutorials/Advanced-statistics/SurvivalAnalysis.html#org5880abf
+quantile(prodlim(Hist(time_fu_os, status_fu_os)~1,data=clinPatAnnotData,reverse=TRUE))
+#Median potential follow-up time of the  study was [q50] days (IQR: [q75 days;upp50 days]). This means that 50% of the patients would have been observed for at least q505 days had there been no events. 
 ```
 
 Survival plots
@@ -131,6 +140,9 @@ plotSurv(tum_percent_report, clinPatAnnotData, "PFS", TRUE)
 plotSurv(tum_percent_annot_, clinPatAnnotData, "OS", TRUE)
 plotSurv(tum_percent_annot_, clinPatAnnotData, "PFS", TRUE)
 
+plotSurv(tum_percent_annot_5, clinPatAnnotData, "OS", TRUE)
+plotSurv(tum_percent_annot_5, clinPatAnnotData, "PFS", TRUE)
+
 # Predominant GP (D, R, P)
 plotSurv(gp_predo3, clinPatAnnotData, "OS", TRUE)
 plotSurv(gp_predo3, clinPatAnnotData, "PFS", TRUE)
@@ -147,14 +159,17 @@ plotSurv(gp_predo3, filter(clinPatAnnotData, gp_predo3 != 'P'), "PFS", TRUE)
 plotSurv(replacement, clinPatAnnotData, "OS", TRUE)
 plotSurv(replacement, clinPatAnnotData, "PFS", TRUE)
 
-# Desmo95 replacement
+# Desmo95 cut-values
 plotSurv(desmo95, clinPatAnnotData, "OS", TRUE)
 plotSurv(desmo95, clinPatAnnotData, "PFS", TRUE)
 
-# Desmo10050 replacement
+# Desmo10050 cut-values
 plotSurv(desmo10050, clinPatAnnotData, "OS", TRUE)
 plotSurv(desmo10050, clinPatAnnotData, "PFS", TRUE)
 
+# Desmo Galjart values
+plotSurv(desmo_galjart, clinPatAnnotData, "OS", TRUE)
+plotSurv(desmo_galjart, clinPatAnnotData, "PFS", TRUE)
 ```
 
 Experimental parameters
@@ -182,41 +197,106 @@ Multivariate analysis (CCox proportional hazards model)
 # Alternatively, build model with continuous data instead of discretized
 
 # OS All
-fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot  + desmo_percent, data = clinPatAnnotData)
 summary(fit.coxph)
 # Obs, seems there is a bug when coefs are Inf plot is not drawn
-ggforest(fit.coxph, data = clinPatAnnotData)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "OS All")
 
-# OS Neoadjuvant
-fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+# OS Neoadjuvant - desmo_percent
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
-ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo_percent")
 
-# OS Chemonaïve
-fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+# OS Neoadjuvant - desmo95
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo95, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo95")
+
+# OS Neoadjuvant - desmo10050
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo10050, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo10050")
+
+# OS Neoadjuvant - gp_predo3
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + gp_predo3, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - gp_predo3")
+
+# UNI - OS Neoadjuvant - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "UNI - OS Neoadjuvant - desmo_galjart")
+
+# OS Neoadjuvant - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo_galjart")
+
+# OS Chemonaïve - desmo_percent
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "N"))
 summary(fit.coxph)
-ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaïve - desmo_percent")
+
+# OS Chemonaïve - desmo95
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo95, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaïve - desmo95")
+
+# OS Chemonaïve - desmo10050
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo10050, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaïve - desmo10050")
+
+# OS Chemonaïve - gp_predo3
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + gp_predo3, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaïve - gp_predo3")
+
+# OS Chemonaïve - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaïve - desmo_galjart")
 # ------------------------
 # PFS All
-fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal +
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + neoadjuvant + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot  + desmo_percent, data = clinPatAnnotData)
 summary(fit.coxph)
-ggforest(fit.coxph, data = clinPatAnnotData)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "")
 
-# PFS Neoadjuvant
-fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+# PFS Neoadjuvant - desmo_percent
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
-ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "PFS Neoadjuvant - desmo_percent")
 
-# PFS Chemonaïve
-fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal +
+# PFS Neoadjuvant - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y", primary_side != "U"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y", primary_side != "U"), main = "PFS Neoadjuvant - desmo_galjart")
+
+# PFS Chemonaïve - desmo_percent
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
                     tum_percent_annot + desmo_percent, data = filter(clinPatAnnotData, neoadjuvant == "N"))
 summary(fit.coxph)
-ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "PFS Chemonaïve - desmo_percent")
+
+# PFS Chemonaïve - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
+                    tum_percent_annot + desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "PFS Chemonaïve - desmo_galjart")
 ```
 
 Correlation matrix
@@ -251,4 +331,18 @@ head(p.mat[, 1:5])
 # Leave blank on no significant coefficient
 corrplot(corr_matrix, type="upper", order="hclust", 
          p.mat = p.mat, sig.level = 0.01, insig = "blank")
+```
+
+Interesting patient groups
+```{r}
+# Pure desmo according to Galjart
+table(clinPatAnnotData$desmo_galjart)
+pure_desmo_galjart <- filter(clinPatAnnotData, desmo_galjart == "(99.9,100]") %>% arrange(neoadjuvant)
+head(pure_desmo_galjart)
+table(pure_desmo_galjart$neoadjuvant)
+
+write.csv(pure_desmo_galjart, paste(workDir, "output/pure_desmo_galjart.csv", sep=""), row.names=FALSE)
+
+desmo95 <- filter(clinPatAnnotData, desmo_percent >= 95 & desmo_percent < 100) %>% arrange(neoadjuvant)
+write.csv(desmo95, paste(workDir, "output/desmo_95.csv", sep=""), row.names=FALSE)
 ```
