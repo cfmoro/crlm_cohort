@@ -3,9 +3,8 @@ library(rgeos)
 library(stringr)
 
 # Set globals
-base_dir <-"/home/bibu/Workspace/crlm_cohort"
-ndpa_dir <- paste(base_dir, "/annotations", sep="")
-out_dir <- paste(base_dir, "/output", sep="")
+ndpa_dir <- "./annotations"
+out_dir <- "./output"
 
 # Parse annotation XML files and build an initial df of form: ids-tumors-blocks-annotation_type-annotation_value
 # where annotation_type = R(eplacement):length | D(esmoplastic):length | T(umor residual):%

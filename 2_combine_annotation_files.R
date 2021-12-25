@@ -5,7 +5,7 @@ base_dir <-"/home/bibu/Workspace/crlm_cohort"
 parsed_csv_dir <- paste(base_dir, "/output/parsed_annotations", sep="")
 combined_fn <- paste(base_dir, "/output/combined_annotations.csv", sep="")
 test_data_fn <- paste(base_dir, "/annotations/Annotation_tests_CRLM_cohort.csv", sep="")
-is_test = TRUE # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
+is_test = FALSE # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Remove previous combined file
 if (file.exists(combined_fn)) {
