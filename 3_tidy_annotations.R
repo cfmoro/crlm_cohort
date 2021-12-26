@@ -1,18 +1,17 @@
 library(tidyverse)
 
 # Globals
-base_dir <-"/home/bibu/Workspace/crlm_cohort"
-combined_fn <- paste(base_dir, "/output/combined_annotations.csv", sep="")
+combined_fn <- "./output/combined_annotations.csv"
 
-combined_slide_fn <- paste(base_dir, "/output/gp_annotations_by_slide.csv", sep="")
-combined_tumor_fn <- paste(base_dir, "/output/gp_annotations_by_tumor.csv", sep="")
-combined_probe_fn <- paste(base_dir, "/output/gp_annotations_by_probe.csv", sep="")
+combined_slide_fn <- "./output/gp_annotations_by_slide.csv"
+combined_tumor_fn <- "./output/gp_annotations_by_tumor.csv"
+combined_probe_fn <- "./output/gp_annotations_by_probe.csv"
 
-regression_slide_fn <- paste(base_dir, "/output/regression_by_slide.csv", sep="")
-regression_tumor_fn <- paste(base_dir, "/output/regression_by_tumor.csv", sep="")
-regression_probe_fn <- paste(base_dir, "/output/regression_by_probe.csv", sep="")
+regression_slide_fn <- "./output/regression_by_slide.csv"
+regression_tumor_fn <- "./output/regression_by_tumor.csv"
+regression_probe_fn <- "./output/regression_by_probe.csv"
 
-test_data_fn <- paste(base_dir, "/annotations/Annotation_tests_CRLM_cohort.csv", sep="")
+test_data_fn <- "./annotations/Annotation_tests_CRLM_cohort.csv"
 is_test = FALSE #TRUE   # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Read all annotations

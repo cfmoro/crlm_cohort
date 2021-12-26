@@ -19,15 +19,13 @@ library(prodlim)
 ```
 
 ```{r}
-workDir <- "/home/bibu/Workspace/crlm_cohort/"
-
-clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+clinPatAnnotFn <- "./output/clin_data_annot.csv"
 ```
 
 Import data
 ```{r}
 clinPatAnnotData <- read.csv(clinPatAnnotFn)
-clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "[0,33]", "(33,66]","(66,99.9]",  "(99.9,100]" )
+clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "(0.1,33]", "(33,66]","(66,99.9]",  "(99.9,100]" )
 ```
 
 Parametrized survival function (to avoid code repetition)
@@ -170,6 +168,10 @@ plotSurv(desmo10050, clinPatAnnotData, "PFS", TRUE)
 # Desmo Galjart values
 plotSurv(desmo_galjart, clinPatAnnotData, "OS", TRUE)
 plotSurv(desmo_galjart, clinPatAnnotData, "PFS", TRUE)
+
+# Desmo Galjart values without 100 % (to see if diffs between other proportions)
+plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "OS", TRUE)
+plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "PFS", TRUE)
 ```
 
 Experimental parameters
@@ -341,8 +343,13 @@ pure_desmo_galjart <- filter(clinPatAnnotData, desmo_galjart == "(99.9,100]") %>
 head(pure_desmo_galjart)
 table(pure_desmo_galjart$neoadjuvant)
 
-write.csv(pure_desmo_galjart, paste(workDir, "output/pure_desmo_galjart.csv", sep=""), row.names=FALSE)
+write.csv(pure_desmo_galjart, "./output/pure_desmo_galjart.csv")
 
-desmo95 <- filter(clinPatAnnotData, desmo_percent >= 95 & desmo_percent < 100) %>% arrange(neoadjuvant)
-write.csv(desmo95, paste(workDir, "output/desmo_95.csv", sep=""), row.names=FALSE)
+# Desmo >= 95
+desmo95 <- filter(clinPatAnnotData, desmo_percent >= 95) %>% arrange(neoadjuvant)
+write.csv(desmo95, "./output/desmo_95.csv", row.names=FALSE)
+
+# Replacement >= 95
+replacement95 <- filter(clinPatAnnotData, replacement_percent >= 95) %>% arrange(neoadjuvant)
+write.csv(replacement95, "./output/replacement_95.csv", row.names=FALSE)
 ```

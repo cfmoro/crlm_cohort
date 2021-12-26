@@ -3,7 +3,7 @@ library(rgeos)
 library(stringr)
 
 # Set globals
-ndpa_dir <- "./annotations"
+ndpa_dir <- "./annotations/211-260/"
 out_dir <- "./output"
 
 # Parse annotation XML files and build an initial df of form: ids-tumors-blocks-annotation_type-annotation_value

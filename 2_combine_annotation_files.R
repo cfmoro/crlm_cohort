@@ -1,10 +1,9 @@
 library(tidyverse)
 
 # Globals
-base_dir <-"/home/bibu/Workspace/crlm_cohort"
-parsed_csv_dir <- paste(base_dir, "/output/parsed_annotations", sep="")
-combined_fn <- paste(base_dir, "/output/combined_annotations.csv", sep="")
-test_data_fn <- paste(base_dir, "/annotations/Annotation_tests_CRLM_cohort.csv", sep="")
+parsed_csv_dir <- "./output/parsed_annotations"
+combined_fn <- "./output/combined_annotations.csv"
+test_data_fn <- "./annotations/Annotation_tests_CRLM_cohort.csv"
 is_test = FALSE # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Remove previous combined file

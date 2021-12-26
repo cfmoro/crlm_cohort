@@ -18,9 +18,7 @@ library(corrplot)
 ```
 
 ```{r}
-workDir <- "/home/bibu/Workspace/crlm_cohort/"
-
-clinPatAnnotFn <- paste(workDir, "output/clin_data_annot.csv", sep="")
+clinPatAnnotFn <-  "./output/clin_data_annot.csv"
 ```
 
 Import data
