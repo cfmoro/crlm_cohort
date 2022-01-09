@@ -18,9 +18,8 @@ library(irr)
 
 
 ```{r}
-workDir <- "/home/bibu/Workspace/crlm_cohort/"
-PeterVEstFn <- paste(workDir, "Peter_review/Teaching_set_HGP_scores_PV.xlsx", sep="")
-KSSlideFn <- paste(workDir, "output/gp_annotations_by_slide.csv", sep="")
+PeterVEstFn <-  "./Peter_review/Teaching_set_HGP_scores_PV_bis.xlsx" # "./Peter_review/Teaching_set_HGP_scores_PV.xlsx" # Only 1-104
+KSSlideFn <- "output/gp_annotations_by_slide.csv" # Only 1-104
 ```
 
 Import and initialize KS data
