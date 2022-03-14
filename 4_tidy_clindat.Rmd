@@ -20,7 +20,7 @@ library(survminer)
 ```
 
 ```{r}
-clinDataFn <- "./datasets/KS_CRLM_2012_2025_pat_260_20211212.xlsx" # "CRLM_clin_cohort_210315.xlsx"
+clinDataFn <- "./datasets/KS_CRCLM_2012-2021_first_310_Jennie_completed_20211210_pure_values.xlsx" # KS_CRLM_2012_2025_pat_260_20211212.xlsx" # "CRLM_clin_cohort_210315.xlsx"
 patDataFn1 <- "./datasets/CRLM_KS_cohort_pathology_Evelina.xlsx" # Evelina: 1-58 # CRLM_KS_cohort_pathology_Evelina (200904) # Lorand (210309)
 patDataFn2 <- "./datasets/CRLM_KS_cohort_pathology_Media-Yousra.xlsx" # Lorand/Danyil-Media-Yousra: 59-310 # "Lorand"
 
@@ -32,7 +32,7 @@ gpAnnotationsTumorFn <- "./output/gp_annotations_by_tumor.csv"
 
 clinPatAnnotFn <- "./output/clin_data_annot.csv"
 
-dateEndFu <- as.Date("2021-12-12") #  Next: "2021-03-08" # Initial Evelina's cohort as.Date("2020-10-29") # Current date of end follow up for study
+dateEndFu <- as.Date("2022-02-26") #  Next: "2021-03-08" # Initial Evelina's cohort as.Date("2020-10-29") # Current date of end follow up for study
 # Obs, check that survival data is updated to the last date for previous (Evelina's) cohort
 ```
 
@@ -50,40 +50,32 @@ Import data
 (nms <- names(read_excel(clinDataFn, n_max = 0)))
 
 # Columns to import from excel
-# "PaRaMet.pseudonym", "dob", "sex", "date.of.liver.op", "date.of.death", 
-# "Cancer.Related.Death..Y.N.U..unclear.", "date.of.progression.recidive", "date.of.progression.in.liver", "neoadjuvant..Y.N.", "sync.meta..s.m.", 
-# "lost.for.follow.up"
+# [1] "PaRaMet nr...1"                       "PaRaMet nr...2"                       "pad"                                  "dob"                                  "sex"                                 
+# [6] "location of primary (left/right)"     "date of liver op"                     "date of death"                        "Cancer Related Death (Y/N/, unclear)" "date of progression/recidive"        
+#[11] "date of progression in liver"         "neoadjvant (Y/N)"                     "sync/meta (s/m)"                      "lost for follow up"                   "comment"   
 
 # Read excel file
-#clinData <- read_excel(clinDataFn, col_types = c(
-#  "numeric", "date", "text", "skip", "text", "skip", "skip", "skip", "skip", "skip",
-#  "skip", "date", "skip", "skip", "skip", "skip", "skip", "date", "text", "skip",
-#  "date", "skip", "date", "skip", "skip", "text", "text", "skip", "skip", "skip",
-#  rep("skip", 16), "date", rep("skip",46)))
-
-clinData <- read_excel(clinDataFn, col_types = c("numeric", "skip", "date", "text", "text", "date", "date", "text",  "date", "date", "text", "text", "date"))
-# Issues in original file: Expecting date in J65 / R65C10: got 'U'Expecting date in F196 / R196C6: got '1014-09-08'
-
+clinData <- read_excel(clinDataFn, col_types = c("skip", "skip", "text", "date", "text", "text", "date", "date", "text",  "date", "date", "text", "text", "date", "skip"))
 
 # Rename columns with easy and concise names: rename(flights, tail_num = tailnum)
 (nms <- names(clinData))
-clinData <- rename(clinData, id = "PaRaMet nr", date_birth = dob, primary_side = "location of primary (left/right)",
+clinData <- rename(clinData, date_birth = "dob", primary_side = "location of primary (left/right)",
                    date_liver_op = "date of liver op", date_death = "date of death", 
                    cancer_death = "Cancer Related Death (Y/N/U, unclear)", date_progression = "date of progression/recidive", 
                    date_progression_liver = "date of progression in liver", neoadjuvant = "neoadjuvant (Y/N)", sync_meta = "sync/meta (s/m)",
-                   date_lost_follow_up = "lost for follow up")
+                   date_lost_follow_up = "date of lost for follow up")
 (nms <- names(clinData))
 
 # Remove wrong rows
 #clinData <- clinData %>% filter(!id %in% c(11, NA))
 
 # Filter for individual cohorts
-clinData <- clinData #  %>% filter(id < 59) # Evelina < 59, Lorand-Danyil >= 59
+#clinData <- clinData #  %>% filter(id < 59) # Evelina < 59, Lorand-Danyil >= 59
 # Remove wrong rows
 #clinData <- clinData %>% filter(!id %in% c(61, 70)) # TODO find personnummer id 70
 
 # Reorder columns
-clinData <- clinData %>% relocate(sex, .after = id)
+clinData <- clinData %>% relocate(sex, .after = pad)
 clinData <- clinData %>% relocate(date_progression, .after = date_liver_op)
 clinData <- clinData %>% relocate(date_progression_liver, .after = date_progression)
 clinData <- clinData %>% relocate(date_lost_follow_up, .after = date_death)
@@ -98,7 +90,7 @@ clinData$sync_meta <- fct_relevel(clinData$sync_meta, "M", "S")
 
 # TODO: Handle cancer_death Unknown
 clinData$cancer_death <- as.factor(clinData$cancer_death) # Y(es) / N(o) / U(nknown)
-clinData$cancer_death <- fct_relevel(clinData$cancer_death, "Y", "N", "U")
+clinData$cancer_death <- fct_relevel(clinData$cancer_death, "Y", "N")
 
 clinData$neoadjuvant <- as.factor(clinData$neoadjuvant) # Y(es) / N(o)
 clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
@@ -107,16 +99,19 @@ clinData$neoadjuvant <- fct_relevel(clinData$neoadjuvant, "Y", "N")
 # MOST IMPORTANT FOR SURV ANALYSYS, ALWAYS CHECK
 fuDeath <- clinData %>% filter(!is.na(date_death)) %>% mutate(time_fu_os = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_os = 1)
 fuAlive <- clinData %>% filter(is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_os = 0)
-fuLostOS <- clinData %>% filter(!is.na(date_lost_follow_up)) %>% mutate(time_fu_os = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_os = 0)
+fuLostOS <- clinData %>% filter(!is.na(date_lost_follow_up) & is.na(date_death)) %>% mutate(time_fu_os = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_os = 0) # "T7303/2015" lost fu 2015 but dod known 2016
+clinSurvDataOS <- rbind(fuDeath, fuAlive, fuLostOS)
+stopifnot(all_equal(clinData, select(clinSurvDataOS, -time_fu_os, -status_fu_os)))
 
 fuProgress <- clinData %>% filter(!is.na(date_progression)) %>% mutate(time_fu_prog = as.double(difftime(date_progression, date_liver_op, units = c("days"))), status_fu_prog = 1)
-fuProgFree <- clinData %>% filter(is.na(date_progression) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog = 0)
-fuProgLost <- clinData %>% filter(is.na(date_progression) & !is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog = 0)
+fuProgressDeath <- clinData %>% filter(is.na(date_progression) & !is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_prog = 1)
+fuProgFree <- clinData %>% filter(is.na(date_progression) & is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog = 0)
+fuProgLost <- clinData %>% filter(is.na(date_progression) & !is.na(date_lost_follow_up) & is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog = 0) # "T7303/2015" lost fu 2015 but dod known 2016
+clinSurvDataPFS <- rbind(fuProgress, fuProgressDeath, fuProgFree, fuProgLost)
+stopifnot(all_equal(clinData, select(clinSurvDataPFS, -time_fu_prog, -status_fu_prog)))
 
-clinSurvDataOS <- rbind(fuDeath, fuAlive, fuLostOS)
-clinSurvDataPFS <- rbind(fuProgress, fuProgFree, fuProgLost)
-
-clinSurvData <- merge(clinSurvDataOS, select(clinSurvDataPFS, id, time_fu_prog, status_fu_prog))
+clinSurvData <- merge(clinSurvDataOS, select(clinSurvDataPFS, pad, time_fu_prog, status_fu_prog))
+stopifnot(all_equal(clinData, select(clinSurvData, -time_fu_os, -status_fu_os, -time_fu_prog, -status_fu_prog)))
 
 #' Calculate age
 #' 
@@ -141,7 +136,7 @@ age <- function(dob, age.day = today(), units = "years", floor = TRUE) {
     return(calc.age)
 }
 clinSurvData <- clinSurvData %>% mutate(age = age(date_birth, date_liver_op))
-clinSurvData <- clinSurvData %>% relocate(age, .after = id)
+clinSurvData <- clinSurvData %>% relocate(age, .after = pad)
 
 # Dichotomize age
 hist(clinSurvData$age)
@@ -158,12 +153,12 @@ Merge clinical with pathology report data
 # Read pathology report data
 # Evelina's dataset
 patDataOrig1 <- read_excel(patDataFn1, col_types = c(
-  "skip", "numeric", "skip", "numeric", "text",  rep("skip", 8),
+  "skip", "numeric", "text", "numeric", "text",  rep("skip", 8),
   rep(c("numeric", "skip", "numeric", "numeric"), 16)
   ))
 # Lorand/Danyil-Media-Yousra dataset
 patDataOrig2 <- read_excel(patDataFn2, col_types = c(
-  "skip", "numeric", "skip", "numeric", "text",  rep("skip", 8),
+  "skip", "numeric", "text", "numeric", "text",  rep("skip", 8),
   rep(c("numeric", "skip", "numeric", "numeric"), 16)
   ))
 
@@ -205,7 +200,7 @@ for(a_letter in tumor_letters) {
   percent_tumor_col_name <- str_glue('tumor_{a_letter}_percent_tumor (%)')
   
   # We know a tumor exists is diameter is not NA, obtain them
-  paired_columns <- patDataTemp %>% select(projectnr, {{largest_diameter_col_name}}, {{percent_tumor_col_name}}) %>% filter(!is.na(.data[[largest_diameter_col_name]]))
+  paired_columns <- patDataTemp %>% select(pad, {{largest_diameter_col_name}}, {{percent_tumor_col_name}}) %>% filter(!is.na(.data[[largest_diameter_col_name]]))
   # Obtain if for any existing tumor (largest diameter != NA) percent tumor is missing (NA)
   incomplete_cases <- paired_columns %>% filter(is.na(.data[[percent_tumor_col_name]]))
   
@@ -237,7 +232,7 @@ patDataTemp <- patDataTemp %>% relocate(sum_tumour_score_report, .before = `tumo
 patData <- patDataTemp %>% select(-contains("largest_diameter"), -contains("tumor_orig"), -contains("tumor_review"), -contains("percent_tumor (%)"), -contains("percentxdiam"))
 
 # Rename columns
-patData <- rename(patData, id = "projectnr", marginal = "min_dist_lever_rr (mm)")
+patData <- rename(patData, marginal = "min_dist_rr (mm)")
                    
 # Convert marginal <1 into 0.5 and make it numeric
 patData$marginal <- gsub("<1", "0.5", patData$marginal, fixed = TRUE)
@@ -287,7 +282,7 @@ patData <- patData %>% mutate(sum_tumour_score_report_group = ifelse(sum_tumour_
 patData <- patData %>% relocate(sum_tumour_score_report_group, .after = sum_tumour_score_report)
 
 # Merge clinical and pathology report data
-clinPatData <- merge(clinSurvData, patData, by = "id", all.x = TRUE)
+clinPatData <- merge(clinSurvData, patData, by = "pad")
 ```
 
 Read and process annotation derived GP data
@@ -343,6 +338,8 @@ gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_group10050 = ifelse(desmo_percent 
                                                                 ifelse(desmo_percent >= 50 & desmo_percent < 100, "50-100", "0-50")))
 # TODO: refactor discretization code from ifelse to cut
 gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_galjart = cut(gpProbeDesmo$desmo_percent, breaks = c(0, 0.1, 33, 66, 99.9, 100), include.lowest = TRUE))
+gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_ks = cut(gpProbeDesmo$desmo_percent, breaks = c(0, 33, 99.9, 100), include.lowest = TRUE))
+gpProbeDesmo <- gpProbeDesmo %>% mutate(desmo_ks2 = cut(gpProbeDesmo$desmo_percent, breaks = c(0, 33, 95, 100), include.lowest = TRUE))
 
 # Dichotomize % replacement2
 table(gpRepl2PercentR2Trim$percent_r2)
@@ -367,6 +364,8 @@ tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_5 = ifelse(t
 
 Merge annotation derived regression and GP data with clinPath data
 ```{r }
+clinPatData <- clinPatData %>% rename(id = "projectnr") %>% relocate(id, .after = pad)
+
 clinPatAnnotationData <- merge(clinPatData, gpProbeReplacement, by = "id", all.x = TRUE)
 clinPatAnnotationData <- merge(clinPatAnnotationData, tumorPercentProbe, by = "id", all.x = TRUE)
 clinPatAnnotationData <- merge(clinPatAnnotationData, gpProbeDesmo, by = "id", all.x = TRUE)

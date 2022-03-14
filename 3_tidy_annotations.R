@@ -20,6 +20,12 @@ df <- read.csv(combined_fn, row.names=NULL)
 # Inv front annotations
 inv_front <- df %>% select(-percents) %>% filter(annotation_types != "Tumor")
 
+# Remove GP annotations from tumors with complete regression
+tumors_complete_regression <- filter(df, percents == 0) %>% mutate(id_tumor = paste(ids, tumors, sep = "-"))
+
+inv_front <- inv_front %>% mutate(id_tumor = paste(ids, tumors, sep = "-"))
+inv_front <- inv_front %>% filter(!(id_tumor %in% tumors_complete_regression$id_tumor))
+
 # Inv front annotations, sum and % by GP and slide
 sum_inv_front_slide <-  inv_front %>% group_by(ids, tumors, blocks, annotation_types) %>% summarise(length_um = sum(lengths_um))
 

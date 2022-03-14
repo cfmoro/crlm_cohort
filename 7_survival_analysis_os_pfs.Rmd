@@ -25,7 +25,15 @@ clinPatAnnotFn <- "./output/clin_data_annot.csv"
 Import data
 ```{r}
 clinPatAnnotData <- read.csv(clinPatAnnotFn)
-clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "(0.1,33]", "(33,66]","(66,99.9]",  "(99.9,100]" )
+
+clinPatAnnotData$desmo_galjart <- as.factor(clinPatAnnotData$desmo_galjart)
+clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "[0,0.1]", "(0.1,33]", "(33,66]","(66,99.9]",  "(99.9,100]")
+
+clinPatAnnotData$desmo_ks <- as.factor(clinPatAnnotData$desmo_ks)
+clinPatAnnotData$desmo_ks <- fct_relevel(clinPatAnnotData$desmo_ks, "[0,33]", "(33,99.9]", "(99.9,100]")
+
+clinPatAnnotData$desmo_ks2 <- as.factor(clinPatAnnotData$desmo_ks2)
+clinPatAnnotData$desmo_ks2 <- fct_relevel(clinPatAnnotData$desmo_ks2, "[0,33]", "(33,95]", "(95,100]")
 ```
 
 Parametrized survival function (to avoid code repetition)
@@ -169,9 +177,17 @@ plotSurv(desmo10050, clinPatAnnotData, "PFS", TRUE)
 plotSurv(desmo_galjart, clinPatAnnotData, "OS", TRUE)
 plotSurv(desmo_galjart, clinPatAnnotData, "PFS", TRUE)
 
+# Desmo KS values
+plotSurv(desmo_ks, clinPatAnnotData, "OS", TRUE)
+plotSurv(desmo_ks, clinPatAnnotData, "PFS", TRUE)
+
+# Desmo KS values with with 95% cut-off
+plotSurv(desmo_ks2, clinPatAnnotData, "OS", TRUE)
+plotSurv(desmo_ks2, clinPatAnnotData, "PFS", TRUE)
+
 # Desmo Galjart values without 100 % (to see if diffs between other proportions)
-plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "OS", TRUE)
-plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "PFS", TRUE)
+#plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "OS", TRUE)
+#plotSurv(desmo_galjart, filter(clinPatAnnotData, desmo_galjart != "(99.9,100]"), "PFS", TRUE)
 ```
 
 Experimental parameters
@@ -233,6 +249,16 @@ ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = 
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
 ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "UNI - OS Neoadjuvant - desmo_galjart")
+
+# UNI - OS Neoadjuvant - desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_ks, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "UNI - OS Neoadjuvant - desmo_KS")
+
+# UNI - OS Neoadjuvant - desmo_ks with 95% cut-off
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_ks2, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "UNI - OS Neoadjuvant - desmo_KS (95% cut-off)")
 
 # OS Neoadjuvant - desmo_galjart
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
@@ -301,7 +327,7 @@ summary(fit.coxph)
 ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "PFS Chemonaïve - desmo_galjart")
 ```
 
-Correlation matrix
+Correlation matrix - All
 ```{r, fig.width= 10}
 corrData <- clinPatAnnotData %>% select(where(is.numeric)) %>% select(-id)
 
@@ -330,9 +356,37 @@ cor.mtest <- function(mat, ...) {
 p.mat <- cor.mtest(corrData)
 head(p.mat[, 1:5])
 
-# Leave blank on no significant coefficient
+# Leave blank on no significant coefficient, 0.05
 corrplot(corr_matrix, type="upper", order="hclust", 
-         p.mat = p.mat, sig.level = 0.01, insig = "blank")
+         p.mat = p.mat, sig.level = 0.05, insig = "blank")
+```
+
+Correlation matrix - Neoadj
+```{r, fig.width= 10}
+corrData <- clinPatAnnotData %>% filter (neoadjuvant == "Y") %>% select(where(is.numeric)) %>% select(-id)
+
+corr_matrix <-cor(corrData, use = "na.or.complete")
+
+# matrix of the p-value of the correlation
+p.mat <- cor.mtest(corrData)
+
+# Leave blank on no significant coefficient, 0.05
+corrplot(corr_matrix, type="upper", order="hclust", 
+         p.mat = p.mat, sig.level = 0.05, insig = "blank")
+```
+
+Correlation matrix - Chemonaive
+```{r, fig.width= 10}
+corrData <- clinPatAnnotData %>% filter (neoadjuvant == "N") %>% select(where(is.numeric)) %>% select(-id)
+
+corr_matrix <-cor(corrData, use = "na.or.complete")
+
+# matrix of the p-value of the correlation
+p.mat <- cor.mtest(corrData)
+
+# Leave blank on no significant coefficient, 0.05
+corrplot(corr_matrix, type="upper", order="hclust", 
+         p.mat = p.mat, sig.level = 0.05, insig = "blank")
 ```
 
 Interesting patient groups
@@ -349,7 +403,7 @@ write.csv(pure_desmo_galjart, "./output/pure_desmo_galjart.csv")
 desmo95 <- filter(clinPatAnnotData, desmo_percent >= 95) %>% arrange(neoadjuvant)
 write.csv(desmo95, "./output/desmo_95.csv", row.names=FALSE)
 
-# Replacement >= 95
-replacement95 <- filter(clinPatAnnotData, replacement_percent >= 95) %>% arrange(neoadjuvant)
-write.csv(replacement95, "./output/replacement_95.csv", row.names=FALSE)
+# Replacement >= 90
+replacement90 <- filter(clinPatAnnotData, replacement_percent >= 90) %>% arrange(neoadjuvant)
+write.csv(replacement90, "./output/replacement_90.csv", row.names=FALSE)
 ```
