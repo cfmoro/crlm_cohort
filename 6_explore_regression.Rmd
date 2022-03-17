@@ -6,6 +6,9 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+Generated on: `r Sys.time()`
+
 ```{r }
 library(tidyverse)
 library(ggplot2)

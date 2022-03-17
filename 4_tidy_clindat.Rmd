@@ -271,8 +271,7 @@ patData <- patData %>% relocate(marginal_group01, .after = marginal_group1)
 # Dichotomize mean tumor percent
 table(patData$mean_tumor_percent_report)
 hist(patData$mean_tumor_percent_report, freq = TRUE, breaks = c(0, 5, seq(10, 100, by = 10)))
-patData <- patData %>% mutate(tum_percent_report_group = ifelse(mean_tumor_percent_report == 0, "0",
-                                                                ifelse(mean_tumor_percent_report > 0 & mean_tumor_percent_report < 50, "1-50", "50+")))
+patData <- patData %>% mutate(tum_percent_report_group = ifelse(mean_tumor_percent_report < 50, "<50", "50+"))
 patData <- patData %>% relocate(tum_percent_report_group, .after = mean_tumor_percent_report)
 
 # Dichotomize sum regression score
@@ -357,8 +356,7 @@ tumorPercentProbe <- tumorPercentProbeOrig %>% rename(id = ids, tum_percent_anno
 # Dichotomize % tumor annot
 table(tumorPercentProbe$tum_percent_annot)
 hist(tumorPercentProbe$tum_percent_annot)
-tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_group = ifelse(tum_percent_annot == 0, "0",
-                                                                ifelse(tum_percent_annot > 0 & tum_percent_annot < 50, "1-50", "50+")))
+tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_group = ifelse(tum_percent_annot < 50, "<50", "50+"))
 tumorPercentProbe <- tumorPercentProbe %>% mutate(tum_percent_annot_5 = ifelse(tum_percent_annot <= 5, "5", "5+"))
 ```
 
