@@ -18,7 +18,7 @@ library(irr)
 
 
 ```{r}
-PeterVEstFn <-  "./Peter_review/Teaching_set_HGP_scores_PV_bis.xlsx" # "./Peter_review/Teaching_set_HGP_scores_PV.xlsx" # Only 1-104
+PeterVEstFn <-  "./visual_scoring/Teaching_set_HGP_scores_PV_bis.xlsx" # "./Peter_review/Teaching_set_HGP_scores_PV.xlsx" # Only 1-104
 KSSlideFn <- "output/gp_annotations_by_slide.csv" # Only 1-104
 ```
 
@@ -26,7 +26,7 @@ Import and initialize KS data
 ```{r}
 # Obtain KS data in tabulated form
 KSSlideDataTab <- read.csv(KSSlideFn, row.names=NULL)
-KSSlideDataTab <- KSSlideDataTab %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name)
+KSSlideDataTab <- KSSlideDataTab %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name) %>% filter(ids < 105)
 KSSlideDataTab$slide_name <- as.factor(KSSlideDataTab$slide_name)
 head(KSSlideDataTab)
 

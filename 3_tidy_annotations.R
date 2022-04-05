@@ -17,11 +17,30 @@ is_test = FALSE #TRUE   # Test consistency of parsed annotations with test datas
 # Read all annotations
 df <- read.csv(combined_fn, row.names=NULL)
 
+
+# Tumor regression by slide
+regression_slide <- df %>% select(-lengths_um) %>% filter(annotation_types == "Tumor")
+
+write.csv(regression_slide, regression_slide_fn, row.names=FALSE)
+
+# Tumor regression by tumor
+regression_tumor <- regression_slide %>% group_by(ids, tumors) %>% summarise(avg_percent = round(mean(percents), 2))
+
+write.csv(regression_tumor, regression_tumor_fn, row.names=FALSE)
+
+# Tumor regression by probe - summarizing the regression in every slide (not by tumors, to diminish bias by tumor size)
+regression_probe <- regression_slide %>% group_by(ids) %>% summarise(avg_percent = round(mean(percents), 2))
+# Tumor regression by probe - summarizing the regression by tumors, as with regression by report
+#regression_probe <- regression_tumor %>% group_by(ids) %>% summarise(avg_percent = round(mean(avg_percent), 2))
+
+write.csv(regression_probe, regression_probe_fn, row.names=FALSE)
+
+
 # Inv front annotations
 inv_front <- df %>% select(-percents) %>% filter(annotation_types != "Tumor")
 
 # Remove GP annotations from tumors with complete regression
-tumors_complete_regression <- filter(df, percents == 0) %>% mutate(id_tumor = paste(ids, tumors, sep = "-"))
+tumors_complete_regression <- filter(regression_tumor, avg_percent == 0) %>% mutate(id_tumor = paste(ids, tumors, sep = "-"))
 
 inv_front <- inv_front %>% mutate(id_tumor = paste(ids, tumors, sep = "-"))
 inv_front <- inv_front %>% filter(!(id_tumor %in% tumors_complete_regression$id_tumor))
@@ -47,23 +66,6 @@ percent_inv_front_probe <- sum_inv_front_probe %>% group_by(ids) %>% mutate(perc
 
 write.csv(percent_inv_front_probe, combined_probe_fn, row.names=FALSE)
 
-
-# Tumor regression by slide
-regression_slide <- df %>% select(-lengths_um) %>% filter(annotation_types == "Tumor")
-
-write.csv(regression_slide, regression_slide_fn, row.names=FALSE)
-
-# Tumor regression by tumor
-regression_tumor <- regression_slide %>% group_by(ids, tumors) %>% summarise(avg_percent = round(mean(percents), 2))
-
-write.csv(regression_tumor, regression_tumor_fn, row.names=FALSE)
-
-# Tumor regression by probe - summarizing the regression in every slide (not by tumors, to diminish bias by tumor size)
-regression_probe <- regression_slide %>% group_by(ids) %>% summarise(avg_percent = round(mean(percents), 2))
-# Tumor regression by probe - summarizing the regression by tumors, as with regression by report
-#regression_probe <- regression_tumor %>% group_by(ids) %>% summarise(avg_percent = round(mean(avg_percent), 2))
-
-write.csv(regression_probe, regression_probe_fn, row.names=FALSE)
 
 # Tests
 # TODO Add tests for tumor regression
