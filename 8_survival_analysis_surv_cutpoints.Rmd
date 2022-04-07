@@ -9,6 +9,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Generated on: `r Sys.time()`
 
+Test github sync
+
 Import required packages
 ```{r}
 library(tidyverse)
