@@ -2,6 +2,8 @@ library(xml2)
 library(rgeos)
 library(stringr)
 
+#add test
+
 # Set globals
 ndpa_dir <- "./annotations/"
 out_dir <- "./output"
