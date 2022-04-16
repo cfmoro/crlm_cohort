@@ -1,3 +1,4 @@
+// groovy -cp jars/opencsv-3.9.jar TestsCsvToNdpa.groovy
 import com.opencsv.CSVParser
 import com.opencsv.CSVParserBuilder
 import com.opencsv.CSVReaderBuilder
@@ -6,7 +7,7 @@ import com.opencsv.CSVWriter
 import groovy.io.FileType
 import groovy.xml.MarkupBuilder
 
-BASE_DIR = '/home/bibu/Workspace/crlm_cohort/annotations/'
+BASE_DIR = '/home/bibu/Workspace/crlm_cohort/annotations_tests/'
 TESTS_CSV_FILE = BASE_DIR + 'Annotation_tests_CRLM_cohort.csv'
 
 def colors = ['D' : '#00ff00', 'R' : '#ff0000', 'R2' : '#ff00ff', 'P' : '#0000ff', '%' : '#ffff00']
@@ -42,7 +43,7 @@ println "Rows mapped by file name: \n" + annotationsByFiles
 annotationsByFiles.each { key, value ->
 
 	// Write ndpa compatible xml file
-	def fileName = BASE_DIR + key + ".ndpi.ndpa"
+	def fileName = BASE_DIR + "annotations/" + key + ".ndpi.ndpa"
 	def writer = new FileWriter(fileName)
 	def xml = new MarkupBuilder(writer)
 	def yPos = -8984090

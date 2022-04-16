@@ -34,6 +34,9 @@ clinPatAnnotFn <- "./output/clin_data_annot.csv"
 
 dateEndFu <- as.Date("2022-02-26") #  Next: "2021-03-08" # Initial Evelina's cohort as.Date("2020-10-29") # Current date of end follow up for study
 # Obs, check that survival data is updated to the last date for previous (Evelina's) cohort
+
+is_visual_scores = FALSE # TRUE   #     Use visual scores data
+is_until_104 = FALSE # TRUE # For comparision annotation vs visual with same n
 ```
 
 Import data
@@ -282,6 +285,10 @@ patData <- patData %>% relocate(sum_tumour_score_report_group, .after = sum_tumo
 
 # Merge clinical and pathology report data
 clinPatData <- merge(clinSurvData, patData, by = "pad")
+
+if(is_visual_scores || is_until_104) { # Limit dataset to Evelina and Danyil
+  clinPatData <- clinPatData %>% filter(projectnr < 105)
+}
 ```
 
 Read and process annotation derived GP data
@@ -295,6 +302,8 @@ gpProbeOrig <- gpProbeOrig %>% rename(id = ids)
 # Classify each probe accordibng to predominant GP (4 categories)
 gpPredominant4 <- gpProbeOrig %>% group_by(id) %>% slice_max(percent_gp) %>% select(id, annotation_types)
 gpPredominant4 <- gpPredominant4 %>% rename(gp_predo4 = annotation_types)
+fifty_fifty <- gpPredominant4 %>% filter(duplicated(id)) %>% pull(id)
+gpPredominant4 <- gpPredominant4 %>% filter(!(id %in% fifty_fifty))
 
 # Classify each probe accordibng to predominant GP (3 categories)
 gPredoDesmoPushing <- gpProbeOrig %>% filter(annotation_types %in% c("D", "P")) %>% select(-length_um)
@@ -303,6 +312,8 @@ gPredoRepl <- gPredoRepl12 %>% group_by(id) %>% summarise(annotation_types = "R"
 
 gpPredominant3 <- rbind(gPredoDesmoPushing, gPredoRepl) %>% group_by(id) %>% slice_max(percent_gp) %>% select(id, annotation_types)
 gpPredominant3 <- gpPredominant3 %>% rename(gp_predo3 = annotation_types)
+fifty_fifty <- gpPredominant3 %>% filter(duplicated(id)) %>% pull(id)
+gpPredominant3 <- gpPredominant3 %>% filter(!(id %in% fifty_fifty))
 
 # Initialize % of replacement and desmoplastic for every tumor, so those with 0 % are captured when filtering
 for(an_id in unique(gpProbeOrig$id)) {
@@ -542,9 +553,19 @@ Final cleanup
 ```{r }
 # Optimal cutpoints using maximally selected rank statistics
 # OS
-surv_cutpoint(clinPatAnnotationData, time = "time_fu_os", event = "status_fu_os", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)
+if(is_visual_scores) {
+surv_cutpoint(clinPatAnnotationData, time = "time_fu_os", event = "status_fu_os", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE) 
+} else {
+  surv_cutpoint(clinPatAnnotationData, time = "time_fu_os", event = "status_fu_os", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE) 
+}
+
 # DFS
-surv_cutpoint(clinPatAnnotationData, time = "time_fu_prog", event = "status_fu_prog", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)
+if(is_visual_scores) {
+  surv_cutpoint(clinPatAnnotationData, time = "time_fu_prog", event = "status_fu_prog", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)
+} else {
+surv_cutpoint(clinPatAnnotationData, time = "time_fu_prog", event = "status_fu_prog", variables = c("age", "num_tumors", "max_diameter", "sum_diameter", "marginal", "mean_tumor_percent_report", "sum_tumour_score_report", "replacement_percent", "desmo_percent", "percent_r2", "tum_percent_annot", "sum_tumour_score_annot", "sum_replacement_score_annot"), progressbar = FALSE)  
+}
+
 
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(age_ = age_group)
 clinPatAnnotationData <- clinPatAnnotationData %>% rename(num_tumors_ = num_tumors_group)

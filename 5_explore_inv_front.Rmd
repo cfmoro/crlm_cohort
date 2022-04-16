@@ -25,6 +25,7 @@ gp_probe_fn <- paste(base_dir, "/gp_annotations_by_probe.csv", sep="")
 clinPatAnnotFn <- paste(base_dir, "/clin_data_annot.csv", sep="")
 
 is_r1_2 = FALSE # TRUE # Wether replacement should be spli into type 1 and 2 categories
+is_detailed = FALSE # TRUE For plotting separately every tumor and probe
 
 annot_types <- c()
 my_colors <- c()
@@ -35,8 +36,6 @@ if(is_r1_2) {
   annot_types <- c("D", "P", "R")
   myColors <- c("green", "blue", "red")  
 }
-
-is_detailed = FALSE # TRUE For plotting separately every tumor and probe
 ```
 
 Configure palete for plots
@@ -279,7 +278,11 @@ gp_slide <- gp_slide %>% rowwise() %>% mutate(percent_desmo_tumor = desmo_tumor[
 gp_slide <- gp_slide %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[ desmo_probe$ids == ids, ]$percent_gp )
 
 # Test % desmo per slide
-stopifnot(all_equal(gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_slide) %>% rename(percent_gp = percent_desmo_slide)))
+gp_slide$percent_gp <- as.double(gp_slide$percent_gp)
+cond1 <- gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp)
+cond2 <- gp_slide %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_slide) %>% rename(percent_gp = percent_desmo_slide)
+all_equal(cond1, cond2)
+stopifnot(all_equal(cond1, cond2))
 
 # Merge neoadj data
 gp_slide <- merge(gp_slide, neoadj_data, by = "ids", all.x = TRUE)

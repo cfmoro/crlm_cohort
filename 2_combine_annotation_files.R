@@ -3,8 +3,8 @@ library(tidyverse)
 # Globals
 parsed_csv_dir <- "./output/parsed_annotations"
 combined_fn <- "./output/combined_annotations.csv"
-test_data_fn <- "./annotations/Annotation_tests_CRLM_cohort.csv"
-is_test = FALSE # Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
+test_data_fn <- "./annotations_tests/Annotation_tests_CRLM_cohort.csv"
+is_test = FALSE # TRUE #  Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
 
 # Remove previous combined file
 if (file.exists(combined_fn)) {

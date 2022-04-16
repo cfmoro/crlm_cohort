@@ -24,7 +24,7 @@ regression_probe_fn <- paste(base_dir, "/regression_by_probe.csv", sep="")
 
 clinPatAnnotFn <- paste(base_dir, "/clin_data_annot.csv", sep="")
 
-is_detailed = FALSE # TRUE For plotting separately every tumor and probe
+is_detailed = FALSE #  For plotting separately every tumor and probe
 ```
 
 ```{r}

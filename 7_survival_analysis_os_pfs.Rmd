@@ -20,6 +20,8 @@ library(prodlim)
 
 ```{r}
 clinPatAnnotFn <- "./output/clin_data_annot.csv"
+
+is_visual_scores = FALSE # TRUE   #     Use visual scores data
 ```
 
 Import data
@@ -330,6 +332,9 @@ ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = 
 Correlation matrix - All
 ```{r, fig.width= 10}
 corrData <- clinPatAnnotData %>% select(where(is.numeric)) %>% select(-id)
+if(is_visual_scores) {
+  corrData <- corrData %>% select(-percent_r2)
+}
 
 corr_matrix <-cor(corrData, use = "na.or.complete")
 head(round(corr_matrix,2))
@@ -364,6 +369,9 @@ corrplot(corr_matrix, type="upper", order="hclust",
 Correlation matrix - Neoadj
 ```{r, fig.width= 10}
 corrData <- clinPatAnnotData %>% filter (neoadjuvant == "Y") %>% select(where(is.numeric)) %>% select(-id)
+if(is_visual_scores) {
+  corrData <- corrData %>% select(-percent_r2)
+}
 
 corr_matrix <-cor(corrData, use = "na.or.complete")
 
@@ -378,6 +386,9 @@ corrplot(corr_matrix, type="upper", order="hclust",
 Correlation matrix - Chemonaive
 ```{r, fig.width= 10}
 corrData <- clinPatAnnotData %>% filter (neoadjuvant == "N") %>% select(where(is.numeric)) %>% select(-id)
+if(is_visual_scores) {
+  corrData <- corrData %>% select(-percent_r2)
+}
 
 corr_matrix <-cor(corrData, use = "na.or.complete")
 
@@ -397,13 +408,13 @@ pure_desmo_galjart <- filter(clinPatAnnotData, desmo_galjart == "(99.9,100]") %>
 head(pure_desmo_galjart)
 table(pure_desmo_galjart$neoadjuvant)
 
-write.csv(pure_desmo_galjart, "./output/pure_desmo_galjart.csv")
+#write.csv(pure_desmo_galjart, "./output/pure_desmo_galjart.csv")
 
 # Desmo >= 95
 desmo95 <- filter(clinPatAnnotData, desmo_percent >= 95) %>% arrange(neoadjuvant)
-write.csv(desmo95, "./output/desmo_95.csv", row.names=FALSE)
+#write.csv(desmo95, "./output/desmo_95.csv", row.names=FALSE)
 
 # Replacement >= 90
 replacement90 <- filter(clinPatAnnotData, replacement_percent >= 90) %>% arrange(neoadjuvant)
-write.csv(replacement90, "./output/replacement_90.csv", row.names=FALSE)
+#write.csv(replacement90, "./output/replacement_90.csv", row.names=FALSE)
 ```
