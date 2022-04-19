@@ -20,6 +20,8 @@ library(irr)
 library(ggExtra)
 library(ggplot2)
 library(knitr)
+library(report)
+library(dplyr)
 ```
 
 
@@ -253,4 +255,8 @@ KSEDDesmo95 <- merge(KSProbeCat %>% select(ids, desmo_95) %>% rename(desmo_95_KS
 head(KSEDDesmo95)
 table(table(KSEDDesmo95$ids))
 kappa2(select(KSEDDesmo95, desmo_95_KS, desmo_95_ED))
+```
+
+```{r}
+cite_packages()
 ```
