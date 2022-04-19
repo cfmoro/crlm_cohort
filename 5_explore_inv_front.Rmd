@@ -17,7 +17,7 @@ library(rstatix)
 ```
 
 ```{r }
-base_dir <-"/home/bibu/Workspace/crlm_cohort/output"
+base_dir <-"./output"
 gp_slide_fn <- paste(base_dir, "/gp_annotations_by_slide.csv", sep="")
 gp_tumor_fn <- paste(base_dir, "/gp_annotations_by_tumor.csv", sep="")
 gp_probe_fn <- paste(base_dir, "/gp_annotations_by_probe.csv", sep="")
