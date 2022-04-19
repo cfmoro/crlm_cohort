@@ -1,0 +1,378 @@
+---
+title: "Visual scoring (EvelinaDanyil) vs annotation-based scoring_review"
+author: "Natalie Geyer"
+date: "4/19/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Generated on: `r Sys.time()`
+
+Import packages
+```{r}
+library(readxl)
+library(tidyverse)
+library(irr)
+library(ggExtra)
+library(ggplot2)
+library(knitr)
+```
+
+
+```{r}
+PeterVEstFn <-  "./input/Data visual scorings/Teaching_set_HGP_scores_PV_bis.xlsx" # Only 1-104
+DanyilEstFn <- "./input/Data visual scorings/HGP_scores_Danyil.xlsx" # Only 59-104
+EvelinaEstFn <- "./input/Data visual scorings/Template_and_example_HGP_scoresEVELINA.xlsx" # Only 1-58
+KSSlideFn <- "./output/gp_annotations_by_slide.csv" 
+```
+
+
+Import and initialize KS data
+```{r}
+# Obtain KS data in tabulated form
+KSSlideDataTab <- read.csv(KSSlideFn, row.names=NULL)
+KSSlideDataTab <- KSSlideDataTab %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name)
+KSSlideDataTab$slide_name <- as.factor(KSSlideDataTab$slide_name)
+head(KSSlideDataTab)
+
+# Recode GP names and R2 to R
+KSSlideDataLong <- KSSlideDataTab %>% select(-tumors, -blocks)
+KSSlideDataLong <- KSSlideDataLong %>% mutate(annotation_types = recode(annotation_types, R2 = "R"))
+KSSlideDataLong <- KSSlideDataLong %>% mutate(annotation_types = recode(annotation_types, D = "desmo"))
+KSSlideDataLong <- KSSlideDataLong %>% mutate(annotation_types = recode(annotation_types, R = "replacement"))
+KSSlideDataLong <- KSSlideDataLong %>% mutate(annotation_types = recode(annotation_types, P = "pushing"))
+
+# Initialize % of each GP for every slide, so we can compare all and avoid lack of scoring for some slides
+for(an_slid in unique(KSSlideDataLong$slide_name)) {
+  an_id <- as.integer(unlist(strsplit(an_slid, "-"))[1])
+  KSSlideDataLong <- KSSlideDataLong %>% add_row(slide_name = an_slid, ids = an_id, annotation_types = factor("desmo"), percent_gp = 0, length_um = 0)
+  KSSlideDataLong <- KSSlideDataLong %>% add_row(slide_name = an_slid, ids = an_id, annotation_types = factor("replacement"), percent_gp = 0, length_um = 0)
+  KSSlideDataLong <- KSSlideDataLong %>% add_row(slide_name = an_slid, ids = an_id, annotation_types = factor("pushing"), percent_gp = 0, length_um = 0)
+}
+
+# Summarize again (sum up) GP values
+KSSlideDataLong <- KSSlideDataLong %>% group_by(ids, slide_name, annotation_types) %>% summarize(percent_gp = sum(percent_gp), length_um = sum(length_um))
+dim(KSSlideDataLong)
+length(unique(KSSlideDataLong$slide_name))
+head(KSSlideDataLong)
+
+# KS slide data
+KSSlideGPDataLong <- KSSlideDataLong %>% mutate(slide_name = paste0(slide_name, '-', annotation_types)) %>% ungroup() %>% select(-ids, -annotation_types, -length_um) %>% rename(percent_gp_KS = "percent_gp")
+dim(KSSlideGPDataLong)
+length(unique(KSSlideGPDataLong$slide_name))/3
+head(KSSlideGPDataLong)
+
+# Transfor KS data to longer format to match ...EstSlideDataWide
+KSSlideDataWide <- KSSlideDataLong %>% pivot_wider(id_cols = slide_name, names_from = annotation_types, values_from = percent_gp, values_fill = list(percent_gp = 0))
+head(KSSlideDataWide)
+```
+
+
+```{r, include=FALSE}
+# Import and initialize Peter data 
+
+# Obtain Peter data
+PeterVEstSlideDataWide <- read_excel(PeterVEstFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+PeterVEstSlideDataWide <- rename(PeterVEstSlideDataWide, slide_name = "Code", desmo = "D", replacement = "R", pushing = "P")
+head(PeterVEstSlideDataWide)
+
+# Pivot to long format
+PeterVEstSlideGPDataLong <- PeterVEstSlideDataWide %>% pivot_longer(-slide_name, names_to = "annotation_types", values_to = "percent_gp")
+PeterVEstSlideGPDataLong <- PeterVEstSlideGPDataLong %>% mutate(slide_name = paste0(slide_name, '-', annotation_types)) %>% select(-annotation_types) %>% rename(percent_gp_Peter = "percent_gp")
+dim(PeterVEstSlideGPDataLong)
+length(unique(PeterVEstSlideGPDataLong$slide_name))/3
+head(PeterVEstSlideGPDataLong)
+```
+
+Import and initialize Evelina/Danyil data
+```{r}
+# Obtain Danyil and Evelina data and remove empty rows
+
+EvelinaEstSlideDataWide <- read_excel(EvelinaEstFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+EvelinaEstSlideDataWide <- rename(EvelinaEstSlideDataWide, slide_name = "Code", desmo = "D", replacement = "R", pushing = "P")
+EvelinaEstSlideDataWide <- EvelinaEstSlideDataWide[!is.na(EvelinaEstSlideDataWide$desmo),]
+EvelinaEstSlideDataWide <- EvelinaEstSlideDataWide[!with(EvelinaEstSlideDataWide,is.na(EvelinaEstSlideDataWide$desmo) & is.na(EvelinaEstSlideDataWide$replacement) & is.na(EvelinaEstSlideDataWide$pushing)),] # remove empty rows
+head(EvelinaEstSlideDataWide)
+
+DanyilEstSlideDataWide <- read_excel(DanyilEstFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+DanyilEstSlideDataWide <- rename(DanyilEstSlideDataWide, slide_name = "Code", desmo = "D", replacement = "R", pushing = "P")
+DanyilEstSlideDataWide <- DanyilEstSlideDataWide[!with(DanyilEstSlideDataWide,is.na(DanyilEstSlideDataWide$desmo) & is.na(DanyilEstSlideDataWide$replacement) & is.na(DanyilEstSlideDataWide$pushing)),] # remove empty rows
+head(DanyilEstSlideDataWide)
+
+# Combine 
+
+EDEstSlideDataWide <- rbind(EvelinaEstSlideDataWide, DanyilEstSlideDataWide)
+head(EDEstSlideDataWide)
+
+# Pivot to long format
+
+EDEstSlideDataLong <- EDEstSlideDataWide %>% pivot_longer(-slide_name, names_to = "annotation_types", values_to = "percent_gp")
+EDEstSlideDataLong <- EDEstSlideDataLong %>% mutate(slide_name = paste0(slide_name, '-', annotation_types)) %>% select(-annotation_types) %>% rename(percent_gp_EvelinaDanyil = "percent_gp")
+dim(EDEstSlideDataLong)
+length(unique(EDEstSlideDataLong$slide_name))/3
+head(EDEstSlideDataLong)
+```
+
+```{r, include=FALSE}
+# Merged KS-Peter scores for every slide and GP
+
+# Merge scores
+KSPeterSlideGPDataLong <- merge(KSSlideGPDataLong, PeterVEstSlideGPDataLong)
+dim(KSPeterSlideGPDataLong)
+length(unique(KSPeterSlideGPDataLong$slide_name))/3
+head(KSPeterSlideGPDataLong)
+
+# QA: Check for discrepancies in scored slides
+QAKSPeterSlideGPDataLong <- merge(KSSlideGPDataLong, PeterVEstSlideGPDataLong, all = T)
+dim(QAKSPeterSlideGPDataLong)
+length(unique(QAKSPeterSlideGPDataLong$slide_name))/3
+#  probes with nas
+unique(QAKSPeterSlideGPDataLong %>% filter(is.na(percent_gp_Peter) & is.na(percent_gp_KS)) %>% pull(slide_name))
+unique(QAKSPeterSlideGPDataLong %>% filter(is.na(percent_gp_Peter) & !is.na(percent_gp_KS)) %>% pull(slide_name))
+unique(QAKSPeterSlideGPDataLong %>% filter(!is.na(percent_gp_Peter) & is.na(percent_gp_KS)) %>% pull(slide_name))
+
+# Visualize, scatter+histogram
+ScatterKSPeterV <- ggplot(KSPeterSlideGPDataLong, aes(x = percent_gp_Peter, y = percent_gp_KS)) + geom_point() + theme_classic()
+ggExtra::ggMarginal(ScatterKSPeterV, type = "histogram", xparams = list(bins = 20, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+
+```
+
+Merged KS-Evelina/Danyil scores for every slide and GP
+```{r}
+# Merge scores
+KSEDSlideGPDataLong <- merge(KSSlideGPDataLong, EDEstSlideDataLong)
+dim(KSEDSlideGPDataLong)
+length(unique(KSEDSlideGPDataLong$slide_name))/3
+head(KSEDSlideGPDataLong)
+
+# QA: Check for discrepancies in scored slides
+QAKSEDSlideGPDataLong <- merge(KSSlideGPDataLong, EDEstSlideDataLong, all = T)
+dim(QAKSEDSlideGPDataLong)
+length(unique(QAKSEDSlideGPDataLong$slide_name))/3
+#  probes with nas
+unique(QAKSEDSlideGPDataLong %>% filter(is.na(percent_gp_EvelinaDanyil) & is.na(percent_gp_KS)) %>% pull(slide_name))
+unique(QAKSEDSlideGPDataLong %>% filter(is.na(percent_gp_EvelinaDanyil) & !is.na(percent_gp_KS)) %>% pull(slide_name))
+unique(QAKSEDSlideGPDataLong %>% filter(!is.na(percent_gp_EvelinaDanyil) & is.na(percent_gp_KS)) %>% pull(slide_name))
+```
+
+Visualization visual Annotation vs whole slide image Annotation Evelina&Danyil and save as pdf output
+```{r}
+# Visualize and save as pdf, scatter+histogram
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/ScatterHistoVisualEDvsWSI.pdf",   # The directory you want to save the file in
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ScatterKSED <- ggplot(KSEDSlideGPDataLong, aes(x = percent_gp_EvelinaDanyil, y = percent_gp_KS)) + geom_point() + theme_classic()
+ggExtra::ggMarginal(ScatterKSED, type = "histogram", size = 3, xparams = list(bins = 20, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+# Step 3: Run dev.off() to create the file!
+dev.off()
+
+ScatterKSED <- ggplot(KSEDSlideGPDataLong, aes(x = percent_gp_EvelinaDanyil, y = percent_gp_KS)) + geom_point() + theme_classic()
+ggExtra::ggMarginal(ScatterKSED, type = "histogram", size = 3, xparams = list(bins = 20, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+
+#Create longer pivot for histogram plotting and rename
+KSEDSlideGPDataLongLonger <- KSEDSlideGPDataLong %>%    
+  
+  pivot_longer(
+    cols = -slide_name,                       # pivot all columns except case_id (all the symptoms columns)
+    names_to = "annotation_type",             # assign name for new column that holds the symptoms
+    values_to = "percent_gp") #%>%  # assign name for new column that holds the values (yes/no)
+  
+  #mutate(percent_gp = replace_na(percent_gp, "unknown")) # convert NA to "unknown"
+head(KSEDSlideGPDataLongLonger)
+KSEDSlideGPDataLongLonger$percent_gp<- as.numeric(as.character(KSEDSlideGPDataLongLonger$percent_gp))
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/HistoVisualEDvsWSI.pdf",   # The directory you want to save the file in
+    width = 12, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggplot(data = KSEDSlideGPDataLongLonger, mapping = aes(x = percent_gp, fill = annotation_type)) +
+  geom_histogram(bins = 200, position = "dodge") +
+  scale_y_sqrt() + #sqrt adjustment of y Axis
+  labs(title = "Frequency distribution") + 
+  geom_hline(yintercept=0, linetype = 2, color = "darkgray")
+# Step 3: Run dev.off() to create the file!
+dev.off()
+
+ggplot(data = KSEDSlideGPDataLongLonger, mapping = aes(x = percent_gp, fill = annotation_type)) +
+  geom_histogram(bins = 200, position = "dodge") +
+  scale_y_sqrt() + #sqrt adjustment of y Axis
+  labs(title = "Frequency distribution") + 
+  geom_hline(yintercept=0, linetype = 2, color = "darkgray")
+
+```
+
+
+```{r, include=FALSE}
+# Intraclass correlation coefficient (ICC) by GP
+
+# Intraclass correlation coefficient (ICC) - Overall
+icc(select(KSPeterSlideGPDataLong, percent_gp_KS, percent_gp_Peter), model = "oneway", type = "consistency", unit = "single")
+# for Evelina/Danyil vs WSI
+icc(select(KSEDSlideGPDataLong, percent_gp_KS, percent_gp_EvelinaDanyil), model = "oneway", type = "consistency", unit = "single")
+
+# Intraclass correlation coefficient (ICC) - Desmo
+KSSlideDesmo <- KSSlideDataWide %>% select(slide_name, desmo) %>% rename(desmo_KS = "desmo")
+PeterSlideDesmo <- PeterVEstSlideDataWide %>% select(slide_name, desmo) %>% rename(desmo_Peter = "desmo")
+KSPeterDesmo <- merge(KSSlideDesmo, PeterSlideDesmo)
+head(KSPeterDesmo)
+
+icc(select(KSPeterDesmo, desmo_KS, desmo_Peter), model = "oneway", type = "consistency", unit = "single")
+
+# Intraclass correlation coefficient (ICC) - Replacement
+KSSlideReplacement <- KSSlideDataWide %>% select(slide_name, replacement) %>% rename(replacement_KS = "replacement")
+PeterSlideReplacement <- PeterVEstSlideDataWide %>% select(slide_name, replacement) %>% rename(replacement_Peter = "replacement")
+KSPeterReplacement <- merge(KSSlideReplacement, PeterSlideReplacement)
+head(KSPeterReplacement)
+
+icc(select(KSPeterReplacement, replacement_KS, replacement_Peter), model = "oneway", type = "consistency", unit = "single")
+
+# Intraclass correlation coefficient (ICC) - Pushing
+KSSlidePushing <- KSSlideDataWide %>% select(slide_name, pushing) %>% rename(pushing_KS = "pushing")
+PeterSlidePushing <- PeterVEstSlideDataWide %>% select(slide_name, pushing) %>% rename(pushing_Peter = "pushing")
+KSPeterPushing <- merge(KSSlidePushing, PeterSlidePushing)
+head(KSPeterPushing)
+
+icc(select(KSPeterPushing, pushing_KS, pushing_Peter), model = "oneway", type = "consistency", unit = "single")
+```
+
+Probe categorization KS
+```{r}
+# Average GP %s for probes
+KSProbeDataLong <- KSSlideDataLong %>% group_by(ids, annotation_types) %>% summarise(percent_gp = round(mean(percent_gp),2))
+head(KSProbeDataLong)
+
+# Categorize by GP predo
+KSProbePredo <- KSProbeDataLong %>% group_by(ids) %>% slice_max(percent_gp) %>% select(ids, annotation_types) %>% rename(gp_predo = "annotation_types")
+head(KSProbePredo)
+
+# Filter out desmo values
+KSProbeDesmo <- KSProbeDataLong %>% filter(annotation_types == "desmo")
+
+# Categorize by 100 % desmo
+KSProbeDesmo <- KSProbeDesmo %>% ungroup() %>% mutate(desmo_100 = cut(KSProbeDesmo$percent_gp, breaks = c(0, 99.9, 100), include.lowest = TRUE))
+
+# Categorize by 95 % desmo
+KSProbeDesmo <- KSProbeDesmo %>% ungroup() %>% mutate(desmo_95 = cut(KSProbeDesmo$percent_gp, breaks = c(0, 94.9, 100), include.lowest = TRUE))
+head(KSProbeDesmo)
+
+# Merge into dataset of probe ids and GP category groups
+KSProbeCat <- merge(KSProbePredo, select(KSProbeDesmo, ids, desmo_100, desmo_95))
+head(KSProbeCat)
+```
+
+
+```{r, include=FALSE}
+# Probe categorization Peter
+
+# Obs, we don't have GP lengths, only %s. Only ay to summarize by probe is averaging among slides. And same has to be done in KS data
+PeterProbeData <- PeterVEstSlideGPDataLong %>% separate(slide_name, into = c("ids", "tumors", "blocks", "annotation_types"), sep = "-") %>% select(ids, annotation_types, percent_gp_Peter) %>% group_by(ids, annotation_types) %>% summarise(percent_gp_Peter = round(mean(percent_gp_Peter),2))
+head(PeterProbeData)
+
+# Categorize by GP predo
+PeterProbePredo <- PeterProbeData %>% group_by(ids) %>% slice_max(percent_gp_Peter) %>% select(ids, annotation_types) %>% rename(gp_predo = "annotation_types")
+head(PeterProbePredo)
+
+#check that each ID has 1 value left
+table(PeterProbePredo$ids)
+table(table(PeterProbePredo$ids))
+
+# DEBUG: probes with null % gps Peter
+unique(PeterProbeData %>% filter(is.na(percent_gp_Peter)) %>% pull(ids))
+
+# Filter out desmo values
+PeterProbeDesmo <- PeterProbeData %>% filter(annotation_types == "desmo")
+
+# Categorize by 100 % desmo
+PeterProbeDesmo <- PeterProbeDesmo %>% ungroup() %>% mutate(desmo_100 = cut(PeterProbeDesmo$percent_gp_Peter, breaks = c(0, 99.9, 100), include.lowest = TRUE))
+
+# Categorize by 95 % desmo
+PeterProbeDesmo <- PeterProbeDesmo %>% ungroup() %>% mutate(desmo_95 = cut(PeterProbeDesmo$percent_gp_Peter, breaks = c(0, 94.9, 100), include.lowest = TRUE))
+head(PeterProbeDesmo)
+
+# Merge into dataset of probe ids and GP category groups
+PeterProbeCat <- merge(PeterProbePredo, select(PeterProbeDesmo, ids, desmo_100, desmo_95))
+head(PeterProbeCat)
+```
+
+Probe categorization Evelina/Danyil
+```{r}
+# Summarise calculates the mean of each slide per ID, so that we have the predominant growth pattern per patient afterwards
+EDProbeData <- EDEstSlideDataLong %>% separate(slide_name, into = c("ids", "tumors", "blocks", "annotation_types"), sep = "-") %>% select(ids, annotation_types, percent_gp_EvelinaDanyil) %>% group_by(ids, annotation_types) %>% summarise(percent_gp_EvelinaDanyil = round(mean(percent_gp_EvelinaDanyil),2))
+head(EDProbeData)
+
+#check that each ID has 3 values
+table(EDProbeData$ids)
+table(table(EDProbeData$ids))
+
+# Categorize by GP predo
+EDProbePredo <- EDProbeData %>% group_by(ids) %>% slice_max(percent_gp_EvelinaDanyil) %>% select(ids, annotation_types) %>% rename(gp_predo = "annotation_types")
+head(EDProbePredo)
+
+#check that each ID has 1 value left
+table(EDProbePredo$ids)
+table(table(EDProbePredo$ids))
+
+# DEBUG: How to handle slides with 50% growth pattern
+
+
+# DEBUG: probes with null % gps Evelina/Danyil
+unique(EDProbeData %>% filter(is.na(percent_gp_EvelinaDanyil)) %>% pull(ids))
+
+# Filter out desmo values
+EDProbeDesmo <- EDProbeData %>% filter(annotation_types == "desmo")
+
+# Categorize by 100 % desmo
+EDProbeDesmo <- EDProbeDesmo %>% ungroup() %>% mutate(desmo_100 = cut(EDProbeDesmo$percent_gp_EvelinaDanyil, breaks = c(0, 99.9, 100), include.lowest = TRUE))
+
+# Categorize by 95 % desmo
+EDProbeDesmo <- EDProbeDesmo %>% ungroup() %>% mutate(desmo_95 = cut(EDProbeDesmo$percent_gp_EvelinaDanyil, breaks = c(0, 94.9, 100), include.lowest = TRUE))
+head(EDProbeDesmo)
+
+# Merge into dataset of probe ids and GP category groups
+EDProbeCat <- merge(EDProbePredo, select(EDProbeDesmo, ids, desmo_100, desmo_95))
+head(EDProbeCat)
+```
+
+
+```{r, include=FALSE}
+# Cohen's Kappa Peter
+
+# GP predo
+KSPeterPredo <- merge(KSProbeCat %>% select(ids, gp_predo) %>% rename(gp_predo_KS = "gp_predo"), PeterProbeCat %>% select(ids, gp_predo) %>% rename(gp_predo_Peter = "gp_predo"))
+kappa2(select(KSPeterPredo, gp_predo_KS, gp_predo_Peter))
+
+# desmo 100
+KSPeterDesmo100 <- merge(KSProbeCat %>% select(ids, desmo_100) %>% rename(desmo_100_KS = "desmo_100"), PeterProbeCat %>% select(ids, desmo_100) %>% rename(desmo_100_Peter = "desmo_100"))
+kappa2(select(KSPeterDesmo100, desmo_100_KS, desmo_100_Peter))
+
+# desmo 95
+KSPeterDesmo95 <- merge(KSProbeCat %>% select(ids, desmo_95) %>% rename(desmo_95_KS = "desmo_95"), PeterProbeCat %>% select(ids, desmo_95) %>% rename(desmo_95_Peter = "desmo_95"))
+kappa2(select(KSPeterDesmo95, desmo_95_KS, desmo_95_Peter))
+```
+
+Cohen's Kappa Evelina/Danyil visual scoring versus annotation-based scoring
+```{r}
+# GP predo
+KSEDPredo <- merge(KSProbeCat %>% select(ids, gp_predo) %>% rename(gp_predo_KS = "gp_predo"), EDProbeCat %>% select(ids, gp_predo) %>% rename(gp_predo_EvelinaDanyil = "gp_predo"))
+head(KSEDPredo)
+table(table(KSEDPredo$ids))
+kappa2(select(KSEDPredo, gp_predo_KS, gp_predo_EvelinaDanyil))
+
+# desmo 100
+KSEDDesmo100 <- merge(KSProbeCat %>% select(ids, desmo_100) %>% rename(desmo_100_KS = "desmo_100"), EDProbeCat %>% select(ids, desmo_100) %>% rename(desmo_100_ED = "desmo_100"))
+head(KSEDDesmo100)
+table(table(KSEDDesmo100$ids))
+kappa2(select(KSEDDesmo100, desmo_100_KS, desmo_100_ED))
+
+# desmo 95
+KSEDDesmo95 <- merge(KSProbeCat %>% select(ids, desmo_95) %>% rename(desmo_95_KS = "desmo_95"), EDProbeCat %>% select(ids, desmo_95) %>% rename(desmo_95_ED = "desmo_95"))
+head(KSEDDesmo95)
+table(table(KSEDDesmo95$ids))
+kappa2(select(KSEDDesmo95, desmo_95_KS, desmo_95_ED))
+```
