@@ -1,0 +1,73 @@
+---
+title: "ClinicalDataTable"
+author: "Natalie Geyer"
+date: "4/20/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import packages
+```{r}
+library(rtables)
+library(tibble)
+library(knitr)
+library(report)
+library(dplyr)
+```
+
+## Clinical Data Summary Table
+
+### Set-Up
+```{r, echo=FALSE}
+# Import directory for entire dataframe (sorted by Probe)
+clinPatAnnotFn <- "./output/clin_data_annot.csv"
+```
+
+Load entire datafram with clinical and pathological data. 
+
+```{r, echo=TRUE}
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+
+clinPatAnnotData_l <- clinPatAnnotData %>% 
+  mutate(sex = recode(sex, m = "male")) %>% 
+  mutate(sex = recode(sex, f = "female"))
+```
+
+### Build the table 
+We want the following variables in the table: age, sex, primary_side, sync_meta, num_tumors, marginal1, max_diameter, sum_diameter, tum_percent_annot
+for all patients and sorted for neoadjuvant, chemonaive patients
+```{r, echo=FALSE}
+s_summary <- function(x) {
+  if (is.numeric(x)) {
+    in_rows(
+      "n" = rcell(sum(!is.na(x)), format = "xx"),
+      "Mean (sd)" = rcell(c(mean(x, na.rm = TRUE), sd(x, na.rm = TRUE)), format = "xx.xx (xx.xx)"),
+      "IQR" = rcell(IQR(x, na.rm = TRUE), format = "xx.xx"),
+      "min - max" = rcell(range(x, na.rm = TRUE), format = "xx.xx - xx.xx")
+    )
+  } else if (is.factor(x)) {
+    
+    vs <- as.list(table(x))
+    do.call(in_rows, lapply(vs, rcell, format = "xx"))
+    
+  } else (
+    stop("type not supported")
+  )
+}
+
+lyt <- basic_table() %>% 
+  split_cols_by(var = "neoadjuvant") %>%
+  add_colcounts() %>%
+  analyze(c("age", "sex", "primary_side", "sync_meta", "num_tumors", "marginal1", "max_diameter", "sum_diameter", "tum_percent_annot"), afun = s_summary) 
+
+tbl <- build_table(lyt, clinPatAnnotData_l)
+tbl
+```
+
+## Report the source of applied packages
+```{r}
+cite_packages()
+```
