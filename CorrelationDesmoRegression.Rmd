@@ -1,0 +1,163 @@
+---
+title: "CorrelationDesmoRegression"
+author: "Natalie Geyer"
+date: "4/19/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Import packages
+```{r}
+#Test commit changes 2022-04-19
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+library(report)
+library(dplyr)
+library(ggpubr)
+```
+
+Use clin_data_annot.csv as input
+```{r, include=FALSE}
+# Import directory for growth pattern annotation by Probe
+#KSProbeFn <- "./output/gp_annotations_by_probe.csv" 
+# Import directory for regression data by Probe
+#tumorPercentProbeFn <- "./output/regression_by_probe.csv"
+
+# Import directory for entire dataframe (sorted by Probe)
+clinPatAnnotFn <- "./output/clin_data_annot.csv"
+```
+
+Import data
+```{r, include=FALSE}
+clinPatAnnotData <- read.csv(clinPatAnnotFn)
+head(clinPatAnnotData)
+```
+
+```{r warning=FALSE}
+# Visualize scatter desmo% tumor_percent_annot per probe
+
+ScatterDesmoRegression <- ggplot(clinPatAnnotData, aes(x = tum_percent_annot, y = desmo_percent)) + geom_point() + theme_classic() + ggtitle("All", subtitle = "least squares regression with confidence interval") + geom_smooth(method=lm, col="black")
+ggExtra::ggMarginal(ScatterDesmoRegression, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+
+# Plot for all patients that did/did not received neoadjuvant chemotherapy
+table(clinPatAnnotData$neoadjuvant)
+nrow(subset(clinPatAnnotData, neoadjuvant=="Y"))
+nrow(subset(clinPatAnnotData, neoadjuvant=="N"))
+```
+
+```{r warning=FALSE}
+ScatterDesmoRegressionNeoY <- ggplot(subset(clinPatAnnotData, neoadjuvant=="Y"), aes(x = tum_percent_annot, y = desmo_percent)) + geom_point() + theme_classic() + ggtitle("neoadjuvant", subtitle = "least squares regression with confidence interval") + geom_smooth(method=lm, col="black")
+ggExtra::ggMarginal(ScatterDesmoRegressionNeoY, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+```
+
+```{r warning=FALSE}
+ScatterDesmoRegressionNeoN <- ggplot(subset(clinPatAnnotData, neoadjuvant=="N"), aes(x = tum_percent_annot, y = desmo_percent)) + geom_point() + theme_classic() + ggtitle("chemonaive", subtitle = "least squares regression with confidence interval") + geom_smooth(method=lm, col="black")
+ggExtra::ggMarginal(ScatterDesmoRegressionNeoN, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+```
+
+```{r include=FALSE}
+# export plots as pdf
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/ScatterDesmoTumAnnot_perProbe.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggExtra::ggMarginal(ScatterDesmoRegression, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+# Step 3: Run dev.off() to create the file
+dev.off()
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/ScatterDesmoTumAnnot_perProbe_neoadjuvant.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggExtra::ggMarginal(ScatterDesmoRegressionNeoY, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+# Step 3: Run dev.off() to create the file
+dev.off()
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/ScatterDesmoTumAnnot_perProbe_chemonaive.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggExtra::ggMarginal(ScatterDesmoRegressionNeoN, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
+# Step 3: Run dev.off() to create the file
+dev.off()
+```
+
+Correlation analysis (Spearman correlation coefficient)
+
+```{r warning=FALSE}
+ggscatter(clinPatAnnotData, x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "All", subtitle = "Spearman correlation coefficient")
+```
+
+```{r warning=FALSE}
+ggscatter(subset(clinPatAnnotData, neoadjuvant=="Y"), x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "neoadjuvant", subtitle = "Spearman correlation coefficient")
+```
+
+```{r warning=FALSE}
+ggscatter(subset(clinPatAnnotData, neoadjuvant=="N"), x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "chemonaive", subtitle = "Spearman correlation coefficient")
+```
+
+```{r include=FALSE}
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/SpearmanCorrDesmoTumAnnot_perProbe_all.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggscatter(clinPatAnnotData, x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "All", subtitle = "Spearman correlation coefficient")
+# Step 3: Run dev.off() to create the file
+dev.off()
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/SpearmanCorrDesmoTumAnnot_perProbe_neoadjuvant.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggscatter(subset(clinPatAnnotData, neoadjuvant=="Y"), x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "neoadjuvant", subtitle = "Spearman correlation coefficient")
+# Step 3: Run dev.off() to create the file
+dev.off()
+
+# Step 1: Call the pdf command to start the plot
+pdf(file = "./plots/SpearmanCorrDesmoTumAnnot_perProbe_chemonaive.pdf",
+    width = 6, # The width of the plot in inches
+    height = 6) # The height of the plot in inches
+# Step 2: Create the plot with R code
+ggscatter(subset(clinPatAnnotData, neoadjuvant=="N"), x = "tum_percent_annot", y = "desmo_percent", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "spearman", cor.coef.coord = c(0, 106),
+          xlab = "% tumor regression", ylab = "% desmoplastic", 
+          title = "chemonaive", subtitle = "Spearman correlation coefficient")
+# Step 3: Run dev.off() to create the file
+dev.off()
+```
+
+```{r}
+cite_packages()
+```
