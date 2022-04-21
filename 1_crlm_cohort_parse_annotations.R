@@ -2,10 +2,15 @@ library(xml2)
 library(rgeos)
 library(stringr)
 
-#add test
-
 # Set globals
-ndpa_dir <- "./input/annotations220314/"
+is_test = FALSE # TRUE #
+
+if(is_test) {
+  ndpa_dir <- "./annotations_tests/annotations/"  
+} else {
+  ndpa_dir <- "./input/annotations_220421/"  
+}
+
 out_dir <- "./output"
 
 # Parse annotation XML files and build an initial df of form: ids-tumors-blocks-annotation_type-annotation_value

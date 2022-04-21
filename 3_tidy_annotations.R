@@ -13,8 +13,8 @@ regression_tumor_fn <- "./output/regression_by_tumor.csv"
 regression_probe_fn <- "./output/regression_by_probe.csv"
 
 test_data_fn <- "./annotations_tests/Annotation_tests_CRLM_cohort.csv"
-is_test = FALSE # TRUE   #  Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
-is_visual_scores = FALSE   # FALSE #  Use visual scores data, only 1-104
+is_test = FALSE #  TRUE   #  Test consistency of parsed annotations with test dataset (csv > ndpa > parse)
+is_visual_scores = FALSE   # TRUE #    Use visual scores data, only 1-104. Se comment and code below to change between Evelina-Danyil and Peter scorings.
 is_until_104 = FALSE # TRUE # For comparision annotation vs visual with same n
 
 if(is_visual_scores) {
@@ -61,12 +61,12 @@ inv_front <- inv_front %>% filter(!(id_tumor %in% tumors_complete_regression$id_
 
 if(is_visual_scores) { # Load visual scores and harmonize data frames format with the annotation derived
   # Obtain Peter data
-  #VEstSlideDataWide <- read_excel(VEstPeterFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+  VEstSlideDataWide <- read_excel(VEstPeterFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
   
-  # Or Evelina and Danyil
-  VEstSlideDataWide1 <- read_excel(VEstEvelinaFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
-  VEstSlideDataWide2 <- read_excel(VEstDanyilFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
-  VEstSlideDataWide <- rbind(VEstSlideDataWide1, VEstSlideDataWide2)
+  # Or Evelina and Danyil (3 lines)
+  #VEstSlideDataWide1 <- read_excel(VEstEvelinaFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+  #VEstSlideDataWide2 <- read_excel(VEstDanyilFn, col_types = c("text", rep("numeric", 3), rep("skip",4)))
+  #VEstSlideDataWide <- rbind(VEstSlideDataWide1, VEstSlideDataWide2)
   
   VEstSlideDataWide <- rename(VEstSlideDataWide, slide_name = "Code")
   head(VEstSlideDataWide)
