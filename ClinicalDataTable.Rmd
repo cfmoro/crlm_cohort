@@ -2,7 +2,10 @@
 title: "ClinicalDataTable"
 author: "Natalie Geyer"
 date: "4/20/2022"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,18 +13,20 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Import packages
-```{r}
+```{r, warning=FALSE, message=FALSE}
 library(rtables)
+library(finalfit)
 library(tibble)
 library(knitr)
 library(report)
 library(dplyr)
+library(ggplot2)
 ```
 
 ## Clinical Data Summary Table
 
 ### Set-Up
-```{r, echo=FALSE}
+```{r, echo=TRUE}
 # Import directory for entire dataframe (sorted by Probe)
 clinPatAnnotFn <- "./output/clin_data_annot.csv"
 ```
@@ -36,7 +41,7 @@ clinPatAnnotData_l <- clinPatAnnotData %>%
   mutate(sex = recode(sex, f = "female"))
 ```
 
-### Build the table 
+### Build the table, version 1 with rtables package 
 We want the following variables in the table: age, sex, primary_side, sync_meta, num_tumors, marginal1, max_diameter, sum_diameter, tum_percent_annot
 for all patients and sorted for neoadjuvant, chemonaive patients
 ```{r, echo=FALSE}
@@ -66,6 +71,64 @@ lyt <- basic_table() %>%
 tbl <- build_table(lyt, clinPatAnnotData_l)
 tbl
 ```
+
+### Build the table, version 2 with finalfit package 
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+# primary_side, sync_meta, num_tumors, marginal1, max_diameter, sum_diameter, tum_percent_annot
+# BUG max_diameter hat 19mal "-Inf" als Wert
+
+#define dependent variable
+dependent <- "neoadjuvant"
+
+#define explanatory variables 
+clinPatAnnotData_l2 <- clinPatAnnotData_l %>% 
+  select(age, 
+         sex, 
+         primary_side, 
+         sync_meta, 
+         num_tumors, 
+         marginal1, 
+         #max_diameter, 
+         sum_diameter, 
+         tum_percent_annot 
+         ) %>% 
+  names() -> explanatory
+
+clinPatAnnotData_l %>% 
+  ff_glimpse(dependent, explanatory)
+
+clinPatAnnotData_l %>% 
+  summary_factorlist(dependent, explanatory, 
+    p=TRUE, na_include=TRUE, 
+    add_dependent_label=TRUE) -> table1
+
+kable(table1)
+
+# analyze correlation with status_fu_os (overall survival, patient dead yes/no bzw 1/0)
+# explanatory variables defined above
+
+#define dependent variable
+clinPatAnnotData_l$status_fu_os <- as.factor(clinPatAnnotData_l$status_fu_os)
+dependentOS = "status_fu_os"
+
+#build table
+clinPatAnnotData_l %>% 
+  finalfit(dependentOS, explanatory) -> table2
+kable(table2)
+
+clinPatAnnotData_l %>% 
+  or_plot(dependentOS, explanatory, 
+  column_space = c(-0.5, 0, 0.5),
+  table_text_size = 3,
+  title_text_size = 10,
+  plot_opts=list(xlab("Odds ratio (95% CI, log scale)"), theme(axis.title = element_text(size=10)))
+  )
+  
+save(table1, table2, dependent, dependentOS, explanatory, file = "out.rda")
+
+
+```
+
 
 ## Report the source of applied packages
 ```{r}
