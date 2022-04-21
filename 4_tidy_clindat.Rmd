@@ -20,9 +20,9 @@ library(survminer)
 ```
 
 ```{r}
-clinDataFn <- "./datasets/KS_CRCLM_2012-2021_first_310_Jennie_completed_20211210_pure_values.xlsx" # KS_CRLM_2012_2025_pat_260_20211212.xlsx" # "CRLM_clin_cohort_210315.xlsx"
-patDataFn1 <- "./datasets/CRLM_KS_cohort_pathology_Evelina.xlsx" # Evelina: 1-58 # CRLM_KS_cohort_pathology_Evelina (200904) # Lorand (210309)
-patDataFn2 <- "./datasets/CRLM_KS_cohort_pathology_Media-Yousra.xlsx" # Lorand/Danyil-Media-Yousra: 59-310 # "Lorand"
+clinDataFn <- "./input/datasets220314/KS_CRCLM_2012-2021_first_310_Jennie_completed_20211210_pure_values.xlsx" # KS_CRLM_2012_2025_pat_260_20211212.xlsx" # "CRLM_clin_cohort_210315.xlsx"
+patDataFn1 <- "./input/datasets220314/CRLM_KS_cohort_pathology_Evelina.xlsx" # Evelina: 1-58 # CRLM_KS_cohort_pathology_Evelina (200904) # Lorand (210309)
+patDataFn2 <- "./input/datasets220314/CRLM_KS_cohort_pathology_Media-Yousra.xlsx" # Lorand/Danyil-Media-Yousra: 59-310 # "Lorand"
 
 gpProbeFn <- "./output/gp_annotations_by_probe.csv"
 tumorPercentProbeFn <- "./output/regression_by_probe.csv"

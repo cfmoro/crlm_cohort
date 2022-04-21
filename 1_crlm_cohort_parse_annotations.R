@@ -5,7 +5,7 @@ library(stringr)
 #add test
 
 # Set globals
-ndpa_dir <- "./annotations/"
+ndpa_dir <- "./input/annotations220314/"
 out_dir <- "./output"
 
 # Parse annotation XML files and build an initial df of form: ids-tumors-blocks-annotation_type-annotation_value
