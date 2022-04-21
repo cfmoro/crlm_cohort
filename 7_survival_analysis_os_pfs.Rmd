@@ -28,6 +28,9 @@ Import data
 ```{r}
 clinPatAnnotData <- read.csv(clinPatAnnotFn)
 
+clinPatAnnotData$gp_predo3 <- as.factor(clinPatAnnotData$gp_predo3)
+clinPatAnnotData$gp_predo3 <- fct_relevel(clinPatAnnotData$gp_predo3, "R", "D", "P")
+
 clinPatAnnotData$desmo_galjart <- as.factor(clinPatAnnotData$desmo_galjart)
 clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "[0,0.1]", "(0.1,33]", "(33,66]","(66,99.9]",  "(99.9,100]")
 
@@ -247,6 +250,24 @@ fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + p
 summary(fit.coxph)
 ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - gp_predo3")
 
+## OS Neoadjuvant - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + num_tumors_ + max_tum_diameter + marginal1 +
+                    tum_percent_annot_ + desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo_galjart")
+
+## OS Neoadjuvant - desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + num_tumors_ + max_tum_diameter + marginal1 +
+                    tum_percent_annot_ + desmo_ks, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo_ks")
+
+## OS Chemonaive - gp_predo3
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + num_tumors_ + max_tum_diameter + gp_predo3,
+                   data = filter(clinPatAnnotData, neoadjuvant == "N"))
+summary(fit.coxph)
+ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaive - gp_predo3")
+
 # UNI - OS Neoadjuvant - desmo_galjart
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
@@ -261,12 +282,6 @@ ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = 
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_ks2, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
 ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "UNI - OS Neoadjuvant - desmo_KS (95% cut-off)")
-
-# OS Neoadjuvant - desmo_galjart
-fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
-                    tum_percent_annot + desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
-summary(fit.coxph)
-ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "Y"), main = "OS Neoadjuvant - desmo_galjart")
 
 # OS Chemonaïve - desmo_percent
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age + sex + primary_side + sync_meta + num_tumors + max_diameter + marginal1 +
