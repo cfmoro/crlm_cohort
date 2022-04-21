@@ -11,7 +11,6 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Import packages
 ```{r}
-#Test commit changes 2022-04-19
 library(readxl)
 library(tidyverse)
 library(ggplot2)
@@ -59,6 +58,16 @@ ggExtra::ggMarginal(ScatterDesmoRegressionNeoY, type = "histogram", size = 3, xp
 ScatterDesmoRegressionNeoN <- ggplot(subset(clinPatAnnotData, neoadjuvant=="N"), aes(x = tum_percent_annot, y = desmo_percent)) + geom_point() + theme_classic() + ggtitle("chemonaive", subtitle = "least squares regression with confidence interval") + geom_smooth(method=lm, col="black")
 ggExtra::ggMarginal(ScatterDesmoRegressionNeoN, type = "histogram", size = 3, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"))
 ```
+
+
+```{r warning=FALSE}
+# Plotting with different colours for neoadjuvant Y/N
+
+ScatterDesmoRegressionTest <- ggplot(clinPatAnnotData, aes(x = tum_percent_annot, y = desmo_percent, color=neoadjuvant)) + geom_point(alpha = 0.5) + theme_classic() + ggtitle("All", subtitle = "least squares regression with confidence interval") + geom_smooth(method=lm, col="black") + theme(legend.position="bottom")
+ggExtra::ggMarginal(ScatterDesmoRegressionTest, type = "histogram", size = 5, xparams = list(bins = 100, fill = "blue"), yparams = list(bins = 100, fill = "orange"), groupFill = TRUE)
+
+```
+
 
 ```{r include=FALSE}
 # export plots as pdf
