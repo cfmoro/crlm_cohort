@@ -126,7 +126,7 @@ clinSurvDataPFSliv <- rbind(fuProgressLiver, fuProgFreeLiver, fuProgLostLiver)
 clinSurvData <- merge(clinSurvDataOS, select(clinSurvDataPFS, pad, time_fu_prog, status_fu_prog))
 stopifnot(all_equal(clinData, select(clinSurvData, -time_fu_os, -status_fu_os, -time_fu_prog, -status_fu_prog)))
 
-clinSurvData <- merge(clinSurvData, select(clinSurvDataPFSliv, id, time_fu_prog_liv, status_fu_prog_liv))
+clinSurvData <- merge(clinSurvData, select(clinSurvDataPFSliv, pad, time_fu_prog_liv, status_fu_prog_liv))
 
 #' Calculate age
 #' 
