@@ -62,7 +62,10 @@ p <- ggsurvplot(fit_object, data = fun_data,
     title = paste(surv_type, "- ", cohort_type),
     xlab = "Days", 
     ylab = "Survival probability",
-    pval = TRUE)  
+    pval = TRUE, 
+    risk.table = TRUE,
+    risk.table.y.text = FALSE, 
+    risk.table.height = 0.3)  
 print(p)
 
 # Neoadjuvant vs Chemonaïve
