@@ -1,6 +1,8 @@
 ---
 title: "7_survival_analysis_os_pfs"
-output: html_document
+output: 
+  pdf_document:
+    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}
