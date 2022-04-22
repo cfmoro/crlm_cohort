@@ -1,6 +1,8 @@
 ---
 title: "8_survival_analysis_with_opt_cutoffs"
-output: html_document
+output: 
+  pdf_document:
+    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}
