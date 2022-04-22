@@ -115,8 +115,18 @@ fuProgLost <- clinData %>% filter(is.na(date_progression) & !is.na(date_lost_fol
 clinSurvDataPFS <- rbind(fuProgress, fuProgressDeath, fuProgFree, fuProgLost)
 stopifnot(all_equal(clinData, select(clinSurvDataPFS, -time_fu_prog, -status_fu_prog)))
 
+#calculate PFS with date_progression_liver
+fuProgressLiver <- clinData %>% filter(!is.na(date_progression_liver)) %>% mutate(time_fu_prog_liv = as.double(difftime(date_progression_liver, date_liver_op, units = c("days"))), status_fu_prog_liv = 1)
+fuProgFreeLiver <- clinData %>% filter(is.na(date_progression_liver) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog_liv = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog_liv = 0)
+fuProgLostLiver <- clinData %>% filter(is.na(date_progression_liver) & !is.na(date_lost_follow_up)) %>% mutate(time_fu_prog_liv = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog_liv = 0)
+
+clinSurvDataPFSliv <- rbind(fuProgressLiver, fuProgFreeLiver, fuProgLostLiver)
+
+
 clinSurvData <- merge(clinSurvDataOS, select(clinSurvDataPFS, pad, time_fu_prog, status_fu_prog))
 stopifnot(all_equal(clinData, select(clinSurvData, -time_fu_os, -status_fu_os, -time_fu_prog, -status_fu_prog)))
+
+clinSurvData <- merge(clinSurvData, select(clinSurvDataPFSliv, id, time_fu_prog_liv, status_fu_prog_liv))
 
 #' Calculate age
 #' 
