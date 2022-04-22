@@ -106,10 +106,10 @@ fuLostOS <- clinData %>% filter(!is.na(date_lost_follow_up) & is.na(date_death))
 clinSurvDataOS <- rbind(fuDeath, fuAlive, fuLostOS)
 stopifnot(all_equal(clinData, select(clinSurvDataOS, -time_fu_os, -status_fu_os)))
 
-fuProgress <- clinData %>% filter(!is.na(date_progression)) %>% mutate(time_fu_prog = as.double(difftime(date_progression, date_liver_op, units = c("days"))), status_fu_prog = 1)
-fuProgressDeath <- clinData %>% filter(is.na(date_progression) & !is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_prog = 1)
-fuProgFree <- clinData %>% filter(is.na(date_progression) & is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog = 0)
-fuProgLost <- clinData %>% filter(is.na(date_progression) & !is.na(date_lost_follow_up) & is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog = 0) # "T7303/2015" lost fu 2015 but dod known 2016
+fuProgress <- clinData %>% filter(!is.na(date_progression_liver)) %>% mutate(time_fu_prog = as.double(difftime(date_progression_liver, date_liver_op, units = c("days"))), status_fu_prog = 1)
+fuProgressDeath <- clinData %>% filter(is.na(date_progression_liver) & !is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_death, date_liver_op, units = c("days"))), status_fu_prog = 1)
+fuProgFree <- clinData %>% filter(is.na(date_progression_liver) & is.na(date_death) & is.na(date_lost_follow_up)) %>% mutate(time_fu_prog = as.double(difftime(dateEndFu, date_liver_op, units = c("days"))), status_fu_prog = 0)
+fuProgLost <- clinData %>% filter(is.na(date_progression_liver) & !is.na(date_lost_follow_up) & is.na(date_death)) %>% mutate(time_fu_prog = as.double(difftime(date_lost_follow_up, date_liver_op, units = c("days"))), status_fu_prog = 0) # "T7303/2015" lost fu 2015 but dod known 2016
 clinSurvDataPFS <- rbind(fuProgress, fuProgressDeath, fuProgFree, fuProgLost)
 stopifnot(all_equal(clinData, select(clinSurvDataPFS, -time_fu_prog, -status_fu_prog)))
 
