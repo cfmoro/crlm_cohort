@@ -3,9 +3,8 @@ title: "ClinicalDataTable"
 author: "Natalie Geyer"
 date: "4/20/2022"
 output:
-  pdf_document: default
-  html_document: default
-  word_document: default
+  pdf_document: 
+    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}

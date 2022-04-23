@@ -2,7 +2,9 @@
 title: "Visual scoring (EvelinaDanyil) vs annotation-based scoring_review"
 author: "Natalie Geyer"
 date: "4/19/2022"
-output: html_document
+output: 
+  pdf_document:
+    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}
@@ -256,6 +258,8 @@ head(KSEDDesmo95)
 table(table(KSEDDesmo95$ids))
 kappa2(select(KSEDDesmo95, desmo_95_KS, desmo_95_ED))
 ```
+
+
 
 ```{r}
 cite_packages()
