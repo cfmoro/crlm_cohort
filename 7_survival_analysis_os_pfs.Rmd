@@ -1,5 +1,6 @@
 ---
 title: "7_survival_analysis_os_pfs"
+#output: html_document
 output: 
   pdf_document:
     keep_md: TRUE
@@ -34,7 +35,7 @@ clinPatAnnotData$gp_predo3 <- as.factor(clinPatAnnotData$gp_predo3)
 clinPatAnnotData$gp_predo3 <- fct_relevel(clinPatAnnotData$gp_predo3, "R", "D", "P")
 
 clinPatAnnotData$desmo_galjart <- as.factor(clinPatAnnotData$desmo_galjart)
-clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "[0,0.1]", "(0.1,33]", "(33,66]","(66,99.9]",  "(99.9,100]")
+clinPatAnnotData$desmo_galjart <- fct_relevel(clinPatAnnotData$desmo_galjart, "(0.1,33]", "[0,0.1]",  "(33,66]","(66,99.9]",  "(99.9,100]")
 
 clinPatAnnotData$desmo_ks <- as.factor(clinPatAnnotData$desmo_ks)
 clinPatAnnotData$desmo_ks <- fct_relevel(clinPatAnnotData$desmo_ks, "[0,33]", "(33,99.9]", "(99.9,100]")
@@ -333,6 +334,52 @@ Multivariate analysis (CCox proportional hazards model)
 # Fit a Cox proportional hazards model
 # Alternatively, build model with continuous data instead of discretized
 
+# ALL ------------------------
+# UNI - OS - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_galjart, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "UNI - OS All - desmo_galjart")
+
+# UNI - OS - desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_ks, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "UNI - OS All - desmo_ks")
+
+# MULTI - OS desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + primary_side + num_tumors_ + max_tum_diameter + marginal1 +
+                    tum_percent_annot_ + desmo_galjart, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "OS All - desmo_galjart")
+
+# MULTI - OS desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + primary_side + num_tumors_ + max_tum_diameter + marginal1 +
+                    tum_percent_annot_ + desmo_ks, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "OS All - desmo_ks")
+
+# UNI - Liver PFS - desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ desmo_galjart, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "UNI - Liver PFS All - desmo_galjart")
+
+# UNI - Liver PFS - desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ desmo_ks, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "UNI - Liver PFS All - desmo_ks")
+
+# MULTI - Liver PFS desmo_galjart
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ primary_side + sync_meta + num_tumors_ + max_tum_diameter + marginal1 +
+                    desmo_galjart, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "Liver PFS All - desmo_galjart")
+
+# MULTI - Liver PFS desmo_ks
+fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ primary_side + sync_meta + num_tumors_ + max_tum_diameter + marginal1 +
+                    desmo_ks, data = clinPatAnnotData)
+summary(fit.coxph)
+ggforest(fit.coxph, data = clinPatAnnotData, main = "Liver PFS All - desmo_ks")
+
+# OS ------------------------
 # UNI - OS Neoadjuvant - desmo_galjart
 fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
@@ -361,7 +408,7 @@ fit.coxph <- coxph(Surv(time = time_fu_os, event = status_fu_os) ~ age_ + num_tu
 summary(fit.coxph)
 ggforest(fit.coxph, data = filter(clinPatAnnotData, neoadjuvant == "N"), main = "OS Chemonaive - gp_predo3")
 
-# ------------------------
+# PFS ------------------------
 # UNI - Liver PFS Neoadjuvant - desmo_galjart
 fit.coxph <- coxph(Surv(time = time_fu_prog, event = status_fu_prog) ~ desmo_galjart, data = filter(clinPatAnnotData, neoadjuvant == "Y"))
 summary(fit.coxph)
