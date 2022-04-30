@@ -106,7 +106,9 @@ regression_probe$ids <- as.factor(regression_probe$ids)
 
 # Merge neoadj data
 regression_probe <- merge(neoadj_data, regression_probe, by = "ids")
-nrow(regression_probe)
+
+# Total number of probes
+paste0("Total number of probes: ", length(unique(regression_probe$ids)))
 
 # Descriptive stats
 descr_regression(regression_probe)
@@ -126,7 +128,9 @@ regression_tumor <- regression_tumor %>% mutate(tumor_name = paste(ids, tumors, 
 
 # Merge neoadj data
 regression_tumor <- merge(neoadj_data, regression_tumor, by = "ids")
-nrow(regression_tumor)
+
+#Total number of tumors
+paste0("Total number of tumors: ", length(unique(regression_tumor$tumor_name)))
 
 # Descriptive stats
 descr_regression(regression_tumor)
@@ -160,7 +164,14 @@ regression_slide <- regression_slide %>% mutate(tumor_name = paste(ids, tumors, 
 
 # Merge neoadj data
 regression_slide <- merge(neoadj_data, regression_slide,by = "ids")
-nrow(regression_slide)
+
+# Total number of slides
+paste0("Total number of slides: ", length(unique(regression_slide$slide_name)))
+#write.csv(distinct(regression_slide, slide_name), "total_slides_regr.csv", row.names = F)
+
+# TODO: control slides with multiple regression annotations, e.g. [1] "71-c-1C"  "112-d-e"  "142-a-2A"
+print("Slides with multiple regression annotations")
+regression_slide$slide_name[duplicated(regression_slide$slide_name)]
 
 # Descriptive stats
 descr_regression(rename(regression_slide, avg_percent = percents))
@@ -185,3 +196,4 @@ if(is_detailed) {
   for(p in plots$plots) {print(p)}
 }
 ```
+
