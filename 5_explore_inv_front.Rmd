@@ -1,8 +1,9 @@
 ---
 title: "5_explore_inv_front"
-output: 
-  pdf_document:
-    keep_md: TRUE
+output: html_document
+#output: 
+#  pdf_document:
+#    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}
@@ -163,7 +164,10 @@ desmo_probe <- tmp %>% group_by(ids) %>% filter(annotation_types == "D") %>% sum
 gp_probe <- gp_probe %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[ desmo_probe$ids == ids, ]$percent_gp )
 
 # Merge neoadj data
-gp_probe <- merge(gp_probe, neoadj_data, by = "ids", all.x = TRUE)
+gp_probe <- merge(gp_probe, neoadj_data, by = "ids")
+
+# Total number of probes
+paste0("Total number of probes: ", length(unique(gp_probe$ids)))
 
 # Test % desmo per probe
 stopifnot(all_equal(gp_probe %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_probe %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_probe) %>% rename(percent_gp = percent_desmo_probe)))
@@ -193,8 +197,7 @@ gp_tumor <- read.csv(gp_tumor_fn, row.names=NULL)
 gp_tumor <- gp_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% relocate(tumor_name)
 gp_tumor$tumor_name <- as.factor(gp_tumor$tumor_name)
 
-# Total number of tumors
-length(unique(gp_tumor$tumor_name))
+#length(unique(gp_tumor$tumor_name))
 
 if(!is_r1_2) {
   # Merge r1 and 2
@@ -220,7 +223,10 @@ gp_tumor <- gp_tumor %>% rowwise() %>% mutate(percent_desmo_probe = desmo_probe[
 stopifnot(all_equal(gp_tumor %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_gp), gp_tumor %>% group_by(ids) %>% filter(annotation_types == "D") %>% select(percent_desmo_tumor) %>% rename(percent_gp = percent_desmo_tumor)))
 
 # Merge neoadj data
-gp_tumor <- merge(gp_tumor, neoadj_data, by = "ids", all.x = TRUE)
+gp_tumor <- merge(gp_tumor, neoadj_data, by = "ids")
+
+#Total number of tumors
+paste0("Total number of tumors: ", length(unique(gp_tumor$tumor_name)))
 
 # Summary stats and density and box plots
 descr_gps(gp_tumor)
@@ -256,9 +262,6 @@ gp_slide <- gp_slide %>% mutate(tumor_name = paste(ids, tumors, sep="-")) %>% re
 gp_slide <- gp_slide %>% mutate(slide_name = paste(ids, tumors, blocks, sep="-")) %>% relocate(slide_name)
 gp_slide$slide_name <- as.factor(gp_slide$slide_name)
 
-# Total number of tumors
-length(unique(gp_slide$slide_name))
-
 if(!is_r1_2) {
   # Merge r1 and 2
   gp_slide$annotation_types <- gsub("R2", "R", gp_slide$annotation_types, fixed = TRUE)
@@ -287,7 +290,11 @@ all_equal(cond1, cond2)
 stopifnot(all_equal(cond1, cond2))
 
 # Merge neoadj data
-gp_slide <- merge(gp_slide, neoadj_data, by = "ids", all.x = TRUE)
+gp_slide <- merge(gp_slide, neoadj_data, by = "ids")
+
+# Total number of slides
+paste0("Total number of slides: ", length(unique(gp_slide$slide_name)))
+#write.csv(distinct(gp_slide, slide_name), "total_slides_gp.csv", row.names = F)
 
 # Summary stats and density and box plots
 descr_gps(gp_slide)
