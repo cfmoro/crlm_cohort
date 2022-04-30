@@ -1,8 +1,9 @@
 ---
 title: "6_explore_regression"
-output: 
-  pdf_document:
-    keep_md: TRUE
+output: html_document
+#output: 
+#  pdf_document:
+#    keep_md: TRUE
 ---
 
 ```{r setup, include=FALSE}
@@ -104,7 +105,8 @@ regression_probe <- read.csv(regression_probe_fn, row.names=NULL)
 regression_probe$ids <- as.factor(regression_probe$ids)
 
 # Merge neoadj data
-regression_probe <- merge(regression_probe, neoadj_data, by = "ids", all.x = TRUE)
+regression_probe <- merge(neoadj_data, regression_probe, by = "ids")
+nrow(regression_probe)
 
 # Descriptive stats
 descr_regression(regression_probe)
@@ -123,7 +125,8 @@ regression_tumor <- read.csv(regression_tumor_fn, row.names=NULL)
 regression_tumor <- regression_tumor %>% mutate(tumor_name = paste(ids, tumors, sep="-"))
 
 # Merge neoadj data
-regression_tumor <- merge(regression_tumor, neoadj_data, by = "ids", all.x = TRUE)
+regression_tumor <- merge(neoadj_data, regression_tumor, by = "ids")
+nrow(regression_tumor)
 
 # Descriptive stats
 descr_regression(regression_tumor)
@@ -156,7 +159,8 @@ regression_slide <- regression_slide %>% mutate(slide_name = paste(ids, tumors, 
 regression_slide <- regression_slide %>% mutate(tumor_name = paste(ids, tumors, sep="-"))
 
 # Merge neoadj data
-regression_slide <- merge(regression_slide, neoadj_data, by = "ids", all.x = TRUE)
+regression_slide <- merge(neoadj_data, regression_slide,by = "ids")
+nrow(regression_slide)
 
 # Descriptive stats
 descr_regression(rename(regression_slide, avg_percent = percents))
